@@ -14,6 +14,12 @@ CI was failing on Ubuntu runners with:
 E: Unable to locate package libwebkit2gtk-4.0-dev
 ```
 
+### 3. Missing System Dependencies for glib-sys
+Build was failing with:
+```
+error: failed to run custom build command for `glib-sys v0.18.1`
+```
+
 ## Fixed ✅
 
 ### Action Version Updates (Commit: 0319b05)
@@ -33,6 +39,17 @@ Updated WebKit package for Ubuntu 24.04 (Noble) compatibility:
 | Package | Old Name | New Name |
 |---------|----------|----------|
 | WebKit GTK | `libwebkit2gtk-4.0-dev` | `libwebkit2gtk-4.1-dev` |
+
+### Additional System Dependencies (Commit: 0499af6)
+
+Added missing packages required for Tauri build on Ubuntu:
+
+| Package | Purpose |
+|---------|---------|
+| `libssl-dev` | OpenSSL/TLS support |
+| `libayatana-appindicator3-dev` | System tray indicators |
+| `webkit2gtk-driver` | WebKit runtime dependencies |
+| `xvfb` | Virtual display for headless testing |
 
 ## Already Up-to-Date ✅
 
@@ -60,9 +77,14 @@ These actions were already using the latest versions:
 - Line 243: Frontend coverage upload
 
 ### Updated 3 instances of WebKit package name
-- Line 75: Backend test dependencies
-- Line 151: Build job Linux dependencies
-- Line 213: Coverage job dependencies
+- Line 77: Backend test dependencies
+- Line 153: Build job Linux dependencies
+- Line 233: Coverage job dependencies
+
+### Added 4 new packages to 3 Ubuntu dependency installations
+- Lines 81-84: Backend test job
+- Lines 157-160: Build job (ubuntu-latest)
+- Lines 237-240: Coverage job
 
 ## Testing
 
@@ -101,6 +123,13 @@ The CI/CD pipeline should now run successfully without deprecation errors.
 - Ubuntu 24.04 deprecated the 4.0 version of WebKit GTK
 - The 4.1 version is API-compatible for Tauri v2
 - No code changes required, only package name update
+
+**Additional Tauri Dependencies**:
+- `libssl-dev`: Required for secure connections and cryptography
+- `libayatana-appindicator3-dev`: Enables system tray functionality
+- `webkit2gtk-driver`: WebKit runtime components
+- `xvfb`: X virtual framebuffer for headless environments (testing)
+- These packages are essential for the `glib-sys` crate and Tauri compilation
 
 ## References
 
