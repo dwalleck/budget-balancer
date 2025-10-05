@@ -18,17 +18,14 @@ impl RateLimiter {
     }
 
     /// Check if enough time has passed since last request and update the timestamp
-    /// Returns Ok(()) if request is allowed, Err with message if rate limited
-    pub fn check_and_update(&self) -> Result<(), String> {
+    /// Returns Ok(()) if request is allowed, Err(seconds) if rate limited
+    pub fn check_and_update(&self) -> Result<(), f64> {
         let mut last = self.last_request.lock().unwrap();
         let now = Instant::now();
 
         if now.duration_since(*last) < self.min_interval {
             let remaining = self.min_interval - now.duration_since(*last);
-            return Err(format!(
-                "Rate limit exceeded. Please wait {:.1} seconds before trying again.",
-                remaining.as_secs_f32()
-            ));
+            return Err(remaining.as_secs_f64());
         }
 
         *last = now;
@@ -36,16 +33,14 @@ impl RateLimiter {
     }
 
     /// Check rate limit without updating (for read-only checks)
-    pub fn check(&self) -> Result<(), String> {
+    /// Returns Ok(()) if request is allowed, Err(seconds) if rate limited
+    pub fn check(&self) -> Result<(), f64> {
         let last = self.last_request.lock().unwrap();
         let now = Instant::now();
 
         if now.duration_since(*last) < self.min_interval {
             let remaining = self.min_interval - now.duration_since(*last);
-            return Err(format!(
-                "Rate limit exceeded. Please wait {:.1} seconds.",
-                remaining.as_secs_f32()
-            ));
+            return Err(remaining.as_secs_f64());
         }
 
         Ok(())
