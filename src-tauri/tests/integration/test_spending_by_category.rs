@@ -1,32 +1,16 @@
-use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::analytics_commands::get_spending_by_category_impl;
-use budget_balancer_lib::commands::csv_commands::import_csv_impl;
-use budget_balancer_lib::models::account::NewAccount;
-use budget_balancer_lib::services::csv_parser::ColumnMapping;
 
 #[tokio::test]
 async fn test_get_spending_by_category() {
     let db = super::get_test_db_pool().await;
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Spending Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    let account_id = super::fixtures::create_test_account(db, "Spending Test").await;
 
-    // Import transactions
-    let csv_content = "Date,Amount,Description,Merchant\n2025-01-15,-100.00,Groceries,Whole Foods\n2025-01-20,-50.00,Coffee,Starbucks";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: Some("Merchant".to_string()),
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    // Create test transactions directly
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-15", -100.00, "Groceries").with_merchant("Whole Foods"),
+        super::fixtures::TestTransaction::new("2025-01-20", -50.00, "Coffee").with_merchant("Starbucks"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Get spending by category
     let result = get_spending_by_category_impl(
@@ -69,26 +53,13 @@ async fn test_get_spending_by_category_empty_range() {
 #[tokio::test]
 async fn test_get_spending_by_category_with_account_filter() {
     let db = super::get_test_db_pool().await;
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Filter Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    let account_id = super::fixtures::create_test_account(db, "Filter Test").await;
 
-    // Import transaction
-    let csv_content = "Date,Amount,Description,Merchant\n2025-01-15,-75.00,Gas,Shell";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: Some("Merchant".to_string()),
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    // Create test transaction directly
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-15", -75.00, "Gas").with_merchant("Shell"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Get spending filtered by account
     let result = get_spending_by_category_impl(

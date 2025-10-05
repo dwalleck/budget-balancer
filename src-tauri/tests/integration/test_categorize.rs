@@ -1,13 +1,15 @@
 use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::category_commands::create_category_impl;
-use budget_balancer_lib::commands::csv_commands::import_csv_impl;
-use budget_balancer_lib::commands::transaction_commands::categorize_transaction_impl;
+use budget_balancer_lib::commands::csv_commands::{import_csv_impl, reset_rate_limiter};
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::models::category::NewCategory;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
+use serial_test::serial;
 
 #[tokio::test]
+#[serial]
 async fn test_categorize_transaction_with_matching_rule() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     // Create test account
     let account = NewAccount {
@@ -40,7 +42,10 @@ async fn test_categorize_transaction_with_matching_rule() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_categorize_transaction_no_rule_match() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(2100)).await; // Wait for rate limiter (2s minimum)
     let db = super::get_test_db_pool().await;
     // Create test account
     let account = NewAccount {
@@ -68,7 +73,9 @@ async fn test_categorize_transaction_no_rule_match() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_categorize_transaction_custom_category() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     // Create test account
     let account = NewAccount {

@@ -1,6 +1,7 @@
 // Integration tests for Budget Balancer Tauri commands
 // These tests verify the contract/interface of each command
 
+pub mod fixtures;
 mod test_account_commands;
 mod test_categorize;
 mod test_category_commands;
