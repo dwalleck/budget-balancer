@@ -458,15 +458,51 @@ pub async fn bulk_delete_transactions_impl(
         ));
     }
 
-    let mut deleted_count = 0i64;
-    let mut failed_ids = Vec::new();
+    // First, check which IDs exist before deletion (to identify non-existent IDs later)
+    let existing_ids_before: std::collections::HashSet<i64> = if transaction_ids.len() > 0 {
+        let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
 
-    for id in transaction_ids {
-        match delete_transaction_impl(db, id).await {
-            Ok(_) => deleted_count += 1,
-            Err(_) => failed_ids.push(id),
+        let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
+        for id in &transaction_ids {
+            check_query = check_query.bind(id);
         }
+
+        check_query
+            .fetch_all(db)
+            .await
+            .map_err(|e| TransactionError::Database(e.to_string()))?
+            .into_iter()
+            .map(|(id,)| id)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Build batched DELETE query with IN clause for performance
+    // This executes 1 query instead of N queries (potentially 1000x faster)
+    let placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let query_str = format!("DELETE FROM transactions WHERE id IN ({})", placeholders);
+
+    let mut query = sqlx::query(&query_str);
+    for id in &transaction_ids {
+        query = query.bind(id);
     }
+
+    let result = query
+        .execute(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    let deleted_count = result.rows_affected() as i64;
+
+    // Determine which IDs failed
+    // Failed IDs are those that either didn't exist or couldn't be deleted
+    let failed_ids: Vec<i64> = transaction_ids
+        .iter()
+        .filter(|id| !existing_ids_before.contains(id))
+        .copied()
+        .collect();
 
     Ok(BulkDeleteResult {
         success: true,
@@ -519,15 +555,55 @@ pub async fn bulk_update_category_impl(
         return Err(TransactionError::CategoryNotFound(category_id));
     }
 
-    let mut updated_count = 0i64;
-    let mut failed_ids = Vec::new();
+    // First, check which IDs exist before update (to identify non-existent IDs)
+    let existing_ids_before: std::collections::HashSet<i64> = if transaction_ids.len() > 0 {
+        let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
 
-    for id in transaction_ids {
-        match update_transaction_category_impl(db, id, category_id).await {
-            Ok(_) => updated_count += 1,
-            Err(_) => failed_ids.push(id),
+        let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
+        for id in &transaction_ids {
+            check_query = check_query.bind(id);
         }
+
+        check_query
+            .fetch_all(db)
+            .await
+            .map_err(|e| TransactionError::Database(e.to_string()))?
+            .into_iter()
+            .map(|(id,)| id)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Build batched UPDATE query with IN clause for performance
+    // This executes 1 query instead of N queries (potentially 1000x faster)
+    let placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let query_str = format!(
+        "UPDATE transactions SET category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id IN ({})",
+        placeholders
+    );
+
+    let mut query = sqlx::query(&query_str);
+    query = query.bind(category_id);
+    for id in &transaction_ids {
+        query = query.bind(id);
     }
+
+    let result = query
+        .execute(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    let updated_count = result.rows_affected() as i64;
+
+    // Determine which IDs failed
+    // Failed IDs are those that didn't exist in the database
+    let failed_ids: Vec<i64> = transaction_ids
+        .iter()
+        .filter(|id| !existing_ids_before.contains(id))
+        .copied()
+        .collect();
 
     Ok(BulkUpdateResult {
         success: true,
