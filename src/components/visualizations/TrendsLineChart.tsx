@@ -15,6 +15,21 @@ interface TrendsLineChartProps {
   title?: string;
 }
 
+interface LineTooltipPayload {
+  value: number;
+  payload: {
+    date: string;
+    amount: number;
+    count: number;
+  };
+}
+
+interface LineTooltipProps {
+  active?: boolean;
+  payload?: LineTooltipPayload[];
+  label?: string;
+}
+
 export function TrendsLineChart({ dataPoints, title }: TrendsLineChartProps) {
   const data = dataPoints.map((point) => ({
     date: new Date(point.date).toLocaleDateString("en-US", {
@@ -25,7 +40,7 @@ export function TrendsLineChart({ dataPoints, title }: TrendsLineChartProps) {
     count: point.transaction_count,
   }));
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: LineTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg">

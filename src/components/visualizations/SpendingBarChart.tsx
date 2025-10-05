@@ -14,6 +14,21 @@ interface SpendingBarChartProps {
   categories: CategorySpending[];
 }
 
+interface BarTooltipPayload {
+  value: number;
+  payload: {
+    name: string;
+    amount: number;
+    count: number;
+  };
+}
+
+interface BarTooltipProps {
+  active?: boolean;
+  payload?: BarTooltipPayload[];
+  label?: string;
+}
+
 export function SpendingBarChart({ categories }: SpendingBarChartProps) {
   const data = categories.map((cat) => ({
     name: cat.category_name.length > 15
@@ -23,7 +38,7 @@ export function SpendingBarChart({ categories }: SpendingBarChartProps) {
     count: cat.transaction_count,
   }));
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: BarTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg">

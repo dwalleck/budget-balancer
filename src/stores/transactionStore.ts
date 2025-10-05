@@ -12,7 +12,7 @@ interface TransactionStore {
   updateCategory: (transactionId: number, categoryId: number) => Promise<void>;
 }
 
-export const useTransactionStore = create<TransactionStore>((set, get) => ({
+export const useTransactionStore = create<TransactionStore>((set, _get) => ({
   transactions: [],
   totalCount: 0,
   loading: false,

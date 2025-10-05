@@ -4,7 +4,6 @@ import { TransactionList } from '../components/TransactionList';
 import { CsvUploadDialog } from '../components/CsvUploadDialog';
 import { AccountCreationDialog } from '../components/AccountCreationDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select';
-import { Button } from '../components/ui/Button';
 
 export const TransactionsPage: React.FC = () => {
   const { accounts, fetchAccounts } = useAccountStore();
@@ -13,13 +12,13 @@ export const TransactionsPage: React.FC = () => {
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [fetchAccounts]);
 
   useEffect(() => {
     if (accounts.length > 0 && !selectedAccountId) {
       setSelectedAccountId(accounts[0].id);
     }
-  }, [accounts]);
+  }, [accounts, selectedAccountId]);
 
   const handleImportComplete = () => {
     setRefreshKey((prev) => prev + 1);

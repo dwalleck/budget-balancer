@@ -72,7 +72,7 @@ export const AccountCreationDialog: React.FC<AccountCreationDialogProps> = ({
             <label className="block text-sm font-medium mb-1">Account Type</label>
             <Select
               value={accountType}
-              onValueChange={(value: any) => setAccountType(value)}
+              onValueChange={(value) => setAccountType(value as 'checking' | 'savings' | 'credit_card')}
             >
               <SelectTrigger>
                 <SelectValue />
