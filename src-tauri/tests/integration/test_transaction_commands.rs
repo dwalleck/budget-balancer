@@ -498,6 +498,77 @@ async fn test_search_transactions_validates_query_length() {
     assert!(error.to_string().contains("too long"), "Error should mention query length");
 }
 
+#[tokio::test]
+async fn test_search_escapes_like_wildcards() {
+    reset_rate_limiter();
+    let db = super::get_test_db_pool().await;
+
+    let account = NewAccount {
+        name: super::unique_name("Wildcard Escape Test"),
+        account_type: budget_balancer_lib::models::account::AccountType::Checking,
+        initial_balance: 0.0,
+    };
+    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+
+    // Create transactions with special LIKE characters
+    let csv_content = "Date,Amount,Description\n\
+                       2025-01-01,-50.00,100% discount offer\n\
+                       2025-01-02,-75.00,100 regular item\n\
+                       2025-01-03,-30.00,50_50 split payment\n\
+                       2025-01-04,-40.00,50 normal payment";
+
+    let mapping = ColumnMapping {
+        date: "Date".to_string(),
+        amount: "Amount".to_string(),
+        description: "Description".to_string(),
+        merchant: None,
+    };
+
+    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
+        .await
+        .expect("Failed to import CSV");
+
+    // Test 1: Search for "100%" should match only "100% discount", not "100 regular"
+    let result = search_transactions_impl(db, "100%".to_string(), Some(TransactionFilter {
+        account_id: Some(account_id),
+        category_id: None,
+        search: None,
+        start_date: None,
+        end_date: None,
+        limit: None,
+        offset: None,
+    }))
+    .await
+    .expect("Search should succeed");
+
+    // Should only match the transaction with literal "100%", not treat % as wildcard
+    assert_eq!(result.len(), 1, "Should match exactly one transaction with '100%'");
+    assert!(
+        result[0].description.contains("100% discount"),
+        "Should match transaction with literal '100%' in description"
+    );
+
+    // Test 2: Search for "50_50" should match only "50_50 split", not "50 normal"
+    let result2 = search_transactions_impl(db, "50_50".to_string(), Some(TransactionFilter {
+        account_id: Some(account_id),
+        category_id: None,
+        search: None,
+        start_date: None,
+        end_date: None,
+        limit: None,
+        offset: None,
+    }))
+    .await
+    .expect("Search should succeed");
+
+    // Should only match the transaction with literal "50_50", not treat _ as single-char wildcard
+    assert_eq!(result2.len(), 1, "Should match exactly one transaction with '50_50'");
+    assert!(
+        result2[0].description.contains("50_50"),
+        "Should match transaction with literal '50_50' in description"
+    );
+}
+
 // ==== T028: Delete Transaction Tests ====
 
 #[tokio::test]

@@ -48,11 +48,15 @@ impl TransactionFilterBuilder {
             where_clauses.push(" AND date <= ?".to_string());
         }
         if filter.search.is_some() {
-            where_clauses.push(" AND (LOWER(description) LIKE LOWER(?) OR LOWER(merchant) LIKE LOWER(?))".to_string());
+            where_clauses.push(" AND (LOWER(description) LIKE LOWER(?) ESCAPE '\\' OR LOWER(merchant) LIKE LOWER(?) ESCAPE '\\')".to_string());
         }
 
         // Format search pattern here to own it
-        let search = filter.search.clone().map(|s| format!("%{}%", s));
+        // Escape LIKE wildcards (% and _) to prevent pattern injection
+        let search = filter.search.clone().map(|s| {
+            let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+            format!("%{}%", escaped)
+        });
 
         Self {
             where_clauses,
