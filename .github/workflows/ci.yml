@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, '001-build-an-application', 'pr*' ]
+    branches: [ main, '001-build-an-application' ]
   pull_request:
     branches: [ main, '001-build-an-application' ]
 
