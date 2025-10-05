@@ -1,3 +1,4 @@
+use crate::errors::sanitize_db_error;
 use crate::services::spending_aggregator::{CategorySpending, SpendingAggregator, SpendingByCategory};
 use crate::services::target_tracker::{TargetTracker, TargetsProgress};
 use crate::services::trends_calculator::{TrendsCalculator, SpendingTrends};
@@ -238,7 +239,7 @@ pub async fn get_dashboard_summary_impl(
     )
     .fetch_one(db)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| sanitize_db_error(e, "calculate total debt for dashboard"))?
     .0;
 
     let total_monthly_payment = sqlx::query_as::<_, (f64,)>(
@@ -246,7 +247,7 @@ pub async fn get_dashboard_summary_impl(
     )
     .fetch_one(db)
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| sanitize_db_error(e, "calculate total debt payments for dashboard"))?
     .0;
 
     // Get target summary

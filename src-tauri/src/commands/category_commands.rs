@@ -1,3 +1,4 @@
+use crate::errors::sanitize_db_error;
 use crate::models::category::{Category, NewCategory};
 use crate::DbPool;
 use sqlx::SqlitePool;
@@ -10,10 +11,7 @@ pub async fn list_categories_impl(db: &SqlitePool) -> Result<Vec<Category>, Stri
     )
     .fetch_all(db)
     .await
-    .map_err(|e| {
-        eprintln!("Database error loading categories: {}", e);
-        "Failed to load categories".to_string()
-    })
+    .map_err(|e| sanitize_db_error(e, "load categories"))
 }
 
 pub async fn create_category_impl(
@@ -27,10 +25,7 @@ pub async fn create_category_impl(
     .bind(&category.icon)
     .execute(db)
     .await
-    .map_err(|e| {
-        eprintln!("Database error creating category: {}", e);
-        "Failed to create category".to_string()
-    })?;
+    .map_err(|e| sanitize_db_error(e, "create category"))?;
 
     Ok(result.last_insert_rowid())
 }
