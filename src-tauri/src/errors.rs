@@ -189,7 +189,7 @@ impl CsvImportError {
         match self {
             // These errors are safe and informative
             CsvImportError::FileTooLarge { size: _, max } => {
-                format!("File too large. Maximum size is {} MB.", max / (1024 * 1024))
+                format!("File too large. Maximum size is {} MB.", max / crate::constants::BYTES_PER_MB)
             }
             CsvImportError::TooManyRows { count, max } => {
                 format!("Too many rows. Maximum is {} rows, found approximately {}.", max, count)

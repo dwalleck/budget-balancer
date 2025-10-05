@@ -5,6 +5,30 @@ interface SpendingPieChartProps {
   categories: CategorySpending[];
 }
 
+interface PieLabelProps {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  percentage: number;
+}
+
+interface TooltipPayload {
+  name: string;
+  value: number;
+  payload: {
+    name: string;
+    value: number;
+    percentage: number;
+  };
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+}
+
 const COLORS = [
   "#3B82F6", // blue-500
   "#10B981", // green-500
@@ -32,7 +56,7 @@ export function SpendingPieChart({ categories }: SpendingPieChartProps) {
     innerRadius,
     outerRadius,
     percentage,
-  }: any) => {
+  }: PieLabelProps) => {
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
     const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
@@ -53,7 +77,7 @@ export function SpendingPieChart({ categories }: SpendingPieChartProps) {
     );
   };
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg">
@@ -101,7 +125,7 @@ export function SpendingPieChart({ categories }: SpendingPieChartProps) {
         <Legend
           verticalAlign="bottom"
           height={36}
-          formatter={(value, entry: any) => (
+          formatter={(value) => (
             <span className="text-sm text-gray-700 dark:text-gray-300">
               {value}
             </span>

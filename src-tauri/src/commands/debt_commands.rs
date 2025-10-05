@@ -155,7 +155,7 @@ pub async fn update_debt_impl(
         }
     }
     if let Some(rate) = interest_rate {
-        if rate < MIN_INTEREST_RATE || rate > MAX_INTEREST_RATE {
+        if !(MIN_INTEREST_RATE..=MAX_INTEREST_RATE).contains(&rate) {
             return Err(DebtError::InvalidInterestRate {
                 min: MIN_INTEREST_RATE,
                 max: MAX_INTEREST_RATE,
@@ -315,7 +315,7 @@ pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<Payof
     .fetch_optional(db)
     .await
     .map_err(|e| DebtError::Database(e.to_string()))?
-    .ok_or_else(|| DebtError::PlanNotFound(plan_id))?;
+    .ok_or(DebtError::PlanNotFound(plan_id))?;
 
     // Recalculate the plan (plans are not fully stored, just metadata)
     let debts = sqlx::query_as::<_, Debt>(
@@ -388,7 +388,7 @@ pub async fn record_debt_payment_impl(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| DebtError::Database(e.to_string()))?
-    .ok_or_else(|| DebtError::NotFound(debt_id))?;
+    .ok_or(DebtError::NotFound(debt_id))?;
 
     if amount > debt.balance {
         return Err(DebtError::PaymentExceedsBalance {
@@ -457,7 +457,7 @@ pub async fn get_debt_progress_impl(
     .fetch_optional(db)
     .await
     .map_err(|e| DebtError::Database(e.to_string()))?
-    .ok_or_else(|| DebtError::NotFound(debt_id))?;
+    .ok_or(DebtError::NotFound(debt_id))?;
 
     let payments = if let (Some(start), Some(end)) = (start_date, end_date) {
         sqlx::query_as::<_, DebtPayment>(

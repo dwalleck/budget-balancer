@@ -3,6 +3,7 @@
 use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::csv_commands::{get_csv_headers, import_csv_impl, reset_rate_limiter};
 use budget_balancer_lib::commands::transaction_commands::{list_transactions_impl, TransactionFilter};
+use budget_balancer_lib::constants::BYTES_PER_MB;
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
 
@@ -11,7 +12,7 @@ use budget_balancer_lib::services::csv_parser::ColumnMapping;
 #[tokio::test]
 async fn test_csv_file_size_limit_enforced() {
     // Generate a CSV larger than 10MB
-    let huge_csv = "a".repeat(11 * 1024 * 1024); // 11MB
+    let huge_csv = "a".repeat(11 * BYTES_PER_MB); // 11MB
 
     let result = get_csv_headers(huge_csv).await;
 
@@ -361,7 +362,7 @@ async fn test_debt_error_messages_sanitized() {
 async fn test_csv_error_user_friendly() {
     let db = super::get_test_db_pool().await;
 
-    let huge_file = "x".repeat(11 * 1024 * 1024);
+    let huge_file = "x".repeat(11 * BYTES_PER_MB);
     let mapping = ColumnMapping {
         date: "Date".to_string(),
         amount: "Amount".to_string(),

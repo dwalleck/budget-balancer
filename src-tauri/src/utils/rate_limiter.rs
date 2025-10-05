@@ -2,6 +2,29 @@
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use thiserror::Error;
+
+/// Error returned when a request is rate limited
+///
+/// Contains the number of seconds to wait before the next request will be allowed
+#[derive(Debug, Clone, Copy, Error)]
+#[error("Rate limit exceeded. Please wait {wait_seconds:.1} seconds before trying again")]
+pub struct RateLimitError {
+    /// Remaining seconds to wait before next request
+    pub wait_seconds: f64,
+}
+
+impl RateLimitError {
+    /// Create a new rate limit error with the given wait time
+    pub fn new(wait_seconds: f64) -> Self {
+        Self { wait_seconds }
+    }
+
+    /// Get the wait time in seconds
+    pub fn seconds(&self) -> f64 {
+        self.wait_seconds
+    }
+}
 
 pub struct RateLimiter {
     last_request: Mutex<Instant>,
@@ -18,43 +41,93 @@ impl RateLimiter {
     }
 
     /// Check if enough time has passed since last request and update the timestamp
-    /// Returns Ok(()) if request is allowed, Err with message if rate limited
-    pub fn check_and_update(&self) -> Result<(), String> {
-        let mut last = self.last_request.lock().unwrap();
+    ///
+    /// This method is thread-safe and updates the internal timestamp on success.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the request is allowed (enough time has passed)
+    /// - `Err(RateLimitError)` with remaining seconds to wait if rate limited
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use budget_balancer_lib::utils::rate_limiter::RateLimiter;
+    ///
+    /// let limiter = RateLimiter::new(2000); // 2 second minimum interval
+    /// match limiter.check_and_update() {
+    ///     Ok(()) => println!("Request allowed"),
+    ///     Err(err) => println!("Rate limited, wait {:.1}s", err.seconds()),
+    /// }
+    /// ```
+    pub fn check_and_update(&self) -> Result<(), RateLimitError> {
+        let mut last = match self.last_request.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned, recovering");
+                poisoned.into_inner()
+            }
+        };
         let now = Instant::now();
 
         if now.duration_since(*last) < self.min_interval {
             let remaining = self.min_interval - now.duration_since(*last);
-            return Err(format!(
-                "Rate limit exceeded. Please wait {:.1} seconds before trying again.",
-                remaining.as_secs_f32()
-            ));
+            return Err(RateLimitError::new(remaining.as_secs_f64()));
         }
 
         *last = now;
         Ok(())
     }
 
-    /// Check rate limit without updating (for read-only checks)
-    pub fn check(&self) -> Result<(), String> {
-        let last = self.last_request.lock().unwrap();
+    /// Check rate limit without updating the timestamp (read-only)
+    ///
+    /// This method checks if a request would be allowed without modifying state.
+    /// Useful for preview/validation without consuming the rate limit.
+    ///
+    /// # Returns
+    /// - `Ok(())` if a request would be allowed
+    /// - `Err(RateLimitError)` with remaining seconds to wait if currently rate limited
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use budget_balancer_lib::utils::rate_limiter::RateLimiter;
+    ///
+    /// let limiter = RateLimiter::new(2000);
+    /// if limiter.check().is_ok() {
+    ///     // Safe to proceed, can call check_and_update()
+    /// }
+    /// ```
+    pub fn check(&self) -> Result<(), RateLimitError> {
+        let last = match self.last_request.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned during check, recovering");
+                poisoned.into_inner()
+            }
+        };
         let now = Instant::now();
 
         if now.duration_since(*last) < self.min_interval {
             let remaining = self.min_interval - now.duration_since(*last);
-            return Err(format!(
-                "Rate limit exceeded. Please wait {:.1} seconds.",
-                remaining.as_secs_f32()
-            ));
+            return Err(RateLimitError::new(remaining.as_secs_f64()));
         }
 
         Ok(())
     }
 
-    /// Reset the rate limiter (for testing purposes)
-    /// Note: Public to allow integration tests to reset state
+    /// Reset the rate limiter to allow immediate requests
+    ///
+    /// This resets the internal timestamp to allow the next request immediately.
+    /// Primarily intended for testing, but safe to use in production if needed.
+    ///
+    /// # Note
+    /// This method is public to allow integration tests to reset state between test runs.
     pub fn reset(&self) {
-        let mut last = self.last_request.lock().unwrap();
+        let mut last = match self.last_request.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned during reset, recovering");
+                poisoned.into_inner()
+            }
+        };
         *last = Instant::now() - Duration::from_secs(100);
     }
 }
@@ -107,5 +180,37 @@ mod tests {
 
         // Check again (should still fail, timestamp unchanged)
         assert!(limiter.check().is_err());
+    }
+
+    #[test]
+    fn test_mutex_poison_recovery() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let limiter = Arc::new(RateLimiter::new(100));
+        let limiter_clone = Arc::clone(&limiter);
+
+        // Spawn a thread that poisons the mutex by panicking while holding the lock
+        let handle = thread::spawn(move || {
+            let _guard = limiter_clone.last_request.lock().unwrap();
+            panic!("Intentionally poisoning mutex for test");
+        });
+
+        // Wait for thread to panic and poison the mutex
+        let _ = handle.join();
+
+        // The mutex is now poisoned, but our implementation should recover
+        // All three methods should still work
+        assert!(limiter.check_and_update().is_ok(), "check_and_update should recover from poison");
+
+        // Wait for interval to test check() and reset()
+        sleep(Duration::from_millis(110));
+
+        assert!(limiter.check().is_ok(), "check should recover from poison");
+
+        limiter.reset(); // Should not panic even with poisoned mutex
+
+        // Verify functionality is maintained after recovery
+        assert!(limiter.check_and_update().is_ok(), "should work normally after poison recovery");
     }
 }

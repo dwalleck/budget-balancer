@@ -66,13 +66,7 @@ pub async fn import_csv_impl(
     // Check rate limit FIRST (before expensive operations)
     // This ensures rate limiting cannot be bypassed by calling _impl directly
     CSV_RATE_LIMITER.check_and_update()
-        .map_err(|e| {
-            // Parse the rate limit message to extract seconds
-            let secs = e.split_whitespace()
-                .find_map(|s| s.parse::<f64>().ok())
-                .unwrap_or(2.0);
-            CsvImportError::RateLimitExceeded(secs)
-        })?;
+        .map_err(|err| CsvImportError::RateLimitExceeded(err.seconds()))?;
 
     // Validate file size
     if csv_content.len() > MAX_CSV_FILE_SIZE {

@@ -15,7 +15,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ accountId }) =
   useEffect(() => {
     fetchTransactions(accountId ? { account_id: accountId } : undefined);
     fetchCategories();
-  }, [accountId]);
+  }, [accountId, fetchTransactions, fetchCategories]);
 
   const getCategoryName = (categoryId: number) => {
     const category = categories.find((c) => c.id === categoryId);
