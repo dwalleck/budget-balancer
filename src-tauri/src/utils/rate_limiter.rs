@@ -18,9 +18,31 @@ impl RateLimiter {
     }
 
     /// Check if enough time has passed since last request and update the timestamp
-    /// Returns Ok(()) if request is allowed, Err(seconds) if rate limited
+    ///
+    /// This method is thread-safe and updates the internal timestamp on success.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the request is allowed (enough time has passed)
+    /// - `Err(f64)` with remaining seconds to wait if rate limited
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use budget_balancer_lib::utils::rate_limiter::RateLimiter;
+    ///
+    /// let limiter = RateLimiter::new(2000); // 2 second minimum interval
+    /// match limiter.check_and_update() {
+    ///     Ok(()) => println!("Request allowed"),
+    ///     Err(secs) => println!("Rate limited, wait {:.1}s", secs),
+    /// }
+    /// ```
     pub fn check_and_update(&self) -> Result<(), f64> {
-        let mut last = self.last_request.lock().unwrap();
+        let mut last = match self.last_request.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned, recovering");
+                poisoned.into_inner()
+            }
+        };
         let now = Instant::now();
 
         if now.duration_since(*last) < self.min_interval {
@@ -32,10 +54,32 @@ impl RateLimiter {
         Ok(())
     }
 
-    /// Check rate limit without updating (for read-only checks)
-    /// Returns Ok(()) if request is allowed, Err(seconds) if rate limited
+    /// Check rate limit without updating the timestamp (read-only)
+    ///
+    /// This method checks if a request would be allowed without modifying state.
+    /// Useful for preview/validation without consuming the rate limit.
+    ///
+    /// # Returns
+    /// - `Ok(())` if a request would be allowed
+    /// - `Err(f64)` with remaining seconds to wait if currently rate limited
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use budget_balancer_lib::utils::rate_limiter::RateLimiter;
+    ///
+    /// let limiter = RateLimiter::new(2000);
+    /// if limiter.check().is_ok() {
+    ///     // Safe to proceed, can call check_and_update()
+    /// }
+    /// ```
     pub fn check(&self) -> Result<(), f64> {
-        let last = self.last_request.lock().unwrap();
+        let last = match self.last_request.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned during check, recovering");
+                poisoned.into_inner()
+            }
+        };
         let now = Instant::now();
 
         if now.duration_since(*last) < self.min_interval {
@@ -46,10 +90,21 @@ impl RateLimiter {
         Ok(())
     }
 
-    /// Reset the rate limiter (for testing purposes)
-    /// Note: Public to allow integration tests to reset state
+    /// Reset the rate limiter to allow immediate requests
+    ///
+    /// This resets the internal timestamp to allow the next request immediately.
+    /// Primarily intended for testing, but safe to use in production if needed.
+    ///
+    /// # Note
+    /// This method is public to allow integration tests to reset state between test runs.
     pub fn reset(&self) {
-        let mut last = self.last_request.lock().unwrap();
+        let mut last = match self.last_request.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned during reset, recovering");
+                poisoned.into_inner()
+            }
+        };
         *last = Instant::now() - Duration::from_secs(100);
     }
 }
