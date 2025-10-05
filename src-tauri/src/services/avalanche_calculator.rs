@@ -78,7 +78,7 @@ impl AvalancheCalculator {
             })
             .collect();
 
-        debt_states.sort_by(|a, b| b.interest_rate.partial_cmp(&a.interest_rate).unwrap());
+        debt_states.sort_by(|a, b| b.interest_rate.partial_cmp(&a.interest_rate).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut monthly_breakdown = Vec::new();
         let mut month: i32 = 1;

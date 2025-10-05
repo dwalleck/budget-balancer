@@ -156,6 +156,7 @@ async fn test_sql_injection_in_account_filter() {
     let malicious_input = TransactionFilter {
         account_id: None,
         category_id: None,
+        search: None,
         start_date: Some("2024-01-01' OR '1'='1".to_string()), // SQL injection attempt
         end_date: None,
         limit: Some(10),
@@ -199,6 +200,7 @@ async fn test_sql_injection_attempts_various_inputs() {
         let filter = TransactionFilter {
             account_id: None,
             category_id: None,
+        search: None,
             start_date: Some(input.to_string()),
             end_date: None,
             limit: Some(10),
@@ -235,6 +237,7 @@ async fn test_errors_dont_expose_database_paths() {
     let filter = TransactionFilter {
         account_id: Some(999999),
         category_id: None,
+        search: None,
         start_date: None,
         end_date: None,
         limit: Some(10),
@@ -322,6 +325,7 @@ async fn test_page_size_limit_enforced() {
     let filter = TransactionFilter {
         account_id: None,
         category_id: None,
+        search: None,
         start_date: None,
         end_date: None,
         limit: Some(1000), // Way over limit

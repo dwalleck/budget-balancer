@@ -12,6 +12,7 @@ pub struct TransactionFilter {
     pub category_id: Option<i64>,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    pub search: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -24,6 +25,7 @@ struct TransactionFilterBuilder {
     category_id: Option<i64>,
     start_date: Option<String>,
     end_date: Option<String>,
+    search: Option<String>,
 }
 
 impl TransactionFilterBuilder {
@@ -42,6 +44,12 @@ impl TransactionFilterBuilder {
         if filter.end_date.is_some() {
             where_clauses.push(" AND date <= ?".to_string());
         }
+        if filter.search.is_some() {
+            where_clauses.push(" AND (LOWER(description) LIKE LOWER(?) OR LOWER(merchant) LIKE LOWER(?))".to_string());
+        }
+
+        // Format search pattern here to own it
+        let search = filter.search.clone().map(|s| format!("%{}%", s));
 
         Self {
             where_clauses,
@@ -49,6 +57,7 @@ impl TransactionFilterBuilder {
             category_id: filter.category_id,
             start_date: filter.start_date.clone(),
             end_date: filter.end_date.clone(),
+            search,
         }
     }
 
@@ -75,6 +84,9 @@ impl TransactionFilterBuilder {
         if let Some(ref end_date) = self.end_date {
             query = query.bind(end_date);
         }
+        if let Some(ref search_pattern) = self.search {
+            query = query.bind(search_pattern).bind(search_pattern);
+        }
         query
     }
 }
@@ -90,6 +102,7 @@ pub async fn list_transactions_impl(
         category_id: None,
         start_date: None,
         end_date: None,
+        search: None,
         limit: Some(DEFAULT_PAGE_SIZE),
         offset: Some(DEFAULT_OFFSET),
     });
@@ -131,6 +144,7 @@ pub async fn count_transactions_impl(
         category_id: None,
         start_date: None,
         end_date: None,
+        search: None,
         limit: None,
         offset: None,
     });
@@ -348,6 +362,178 @@ pub async fn count_transactions(
     filter: Option<TransactionFilter>,
 ) -> Result<i64, String> {
     count_transactions_impl(&db_pool.0, filter)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Search transactions implementation
+pub async fn search_transactions_impl(
+    db: &SqlitePool,
+    query: String,
+    filter: Option<TransactionFilter>,
+) -> Result<Vec<Transaction>, TransactionError> {
+    // Validate query length
+    if query.len() > 100 {
+        return Err(TransactionError::ValidationError("Search query too long (max 100 characters)".to_string()));
+    }
+
+    // Add search to filter
+    let mut search_filter = filter.unwrap_or(TransactionFilter {
+        account_id: None,
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        search: None,
+        limit: Some(DEFAULT_PAGE_SIZE),
+        offset: Some(DEFAULT_OFFSET),
+    });
+    search_filter.search = Some(query);
+
+    list_transactions_impl(db, Some(search_filter)).await
+}
+
+#[tauri::command]
+pub async fn search_transactions(
+    db_pool: tauri::State<'_, DbPool>,
+    query: String,
+    filter: Option<TransactionFilter>,
+) -> Result<Vec<Transaction>, String> {
+    search_transactions_impl(&db_pool.0, query, filter)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Delete transaction implementation
+pub async fn delete_transaction_impl(
+    db: &SqlitePool,
+    transaction_id: i64,
+) -> Result<(), TransactionError> {
+    let result = sqlx::query("DELETE FROM transactions WHERE id = ?")
+        .bind(transaction_id)
+        .execute(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    if result.rows_affected() == 0 {
+        return Err(TransactionError::NotFound(transaction_id));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_transaction(
+    db_pool: tauri::State<'_, DbPool>,
+    transaction_id: i64,
+) -> Result<(), String> {
+    delete_transaction_impl(&db_pool.0, transaction_id)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Bulk delete transactions implementation
+#[derive(Debug, Serialize)]
+pub struct BulkDeleteResult {
+    pub success: bool,
+    pub deleted_count: i64,
+    pub failed_ids: Vec<i64>,
+}
+
+pub async fn bulk_delete_transactions_impl(
+    db: &SqlitePool,
+    transaction_ids: Vec<i64>,
+) -> Result<BulkDeleteResult, TransactionError> {
+    // Validate input
+    if transaction_ids.is_empty() {
+        return Err(TransactionError::ValidationError("Transaction IDs cannot be empty".to_string()));
+    }
+    if transaction_ids.len() > 1000 {
+        return Err(TransactionError::ValidationError("Cannot delete more than 1000 transactions at once".to_string()));
+    }
+
+    let mut deleted_count = 0i64;
+    let mut failed_ids = Vec::new();
+
+    for id in transaction_ids {
+        match delete_transaction_impl(db, id).await {
+            Ok(_) => deleted_count += 1,
+            Err(_) => failed_ids.push(id),
+        }
+    }
+
+    Ok(BulkDeleteResult {
+        success: true,
+        deleted_count,
+        failed_ids,
+    })
+}
+
+#[tauri::command]
+pub async fn bulk_delete_transactions(
+    db_pool: tauri::State<'_, DbPool>,
+    transaction_ids: Vec<i64>,
+) -> Result<BulkDeleteResult, String> {
+    bulk_delete_transactions_impl(&db_pool.0, transaction_ids)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Bulk update category implementation
+#[derive(Debug, Serialize)]
+pub struct BulkUpdateResult {
+    pub success: bool,
+    pub updated_count: i64,
+    pub failed_ids: Vec<i64>,
+}
+
+pub async fn bulk_update_category_impl(
+    db: &SqlitePool,
+    transaction_ids: Vec<i64>,
+    category_id: i64,
+) -> Result<BulkUpdateResult, TransactionError> {
+    // Validate input
+    if transaction_ids.is_empty() {
+        return Err(TransactionError::ValidationError("Transaction IDs cannot be empty".to_string()));
+    }
+    if transaction_ids.len() > 1000 {
+        return Err(TransactionError::ValidationError("Cannot update more than 1000 transactions at once".to_string()));
+    }
+
+    // Verify category exists
+    let category_exists = sqlx::query("SELECT id FROM categories WHERE id = ?")
+        .bind(category_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    if category_exists.is_none() {
+        return Err(TransactionError::CategoryNotFound(category_id));
+    }
+
+    let mut updated_count = 0i64;
+    let mut failed_ids = Vec::new();
+
+    for id in transaction_ids {
+        match update_transaction_category_impl(db, id, category_id).await {
+            Ok(_) => updated_count += 1,
+            Err(_) => failed_ids.push(id),
+        }
+    }
+
+    Ok(BulkUpdateResult {
+        success: true,
+        updated_count,
+        failed_ids,
+    })
+}
+
+#[tauri::command]
+pub async fn bulk_update_category(
+    db_pool: tauri::State<'_, DbPool>,
+    transaction_ids: Vec<i64>,
+    category_id: i64,
+) -> Result<BulkUpdateResult, String> {
+    bulk_update_category_impl(&db_pool.0, transaction_ids, category_id)
         .await
         .map_err(|e| e.to_user_message())
 }
