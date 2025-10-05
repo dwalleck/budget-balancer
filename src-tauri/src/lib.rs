@@ -97,7 +97,9 @@ async fn initialize_database() -> Result<SqlitePool, String> {
 
     db_path.push("budget_balancer.db");
 
-    tracing::info!(path = %db_path.display(), "Initializing database");
+    // Log filename at info level, full path only at debug level (per SECURITY.md)
+    tracing::info!("Initializing database");
+    tracing::debug!(path = %db_path.display(), "Database full path");
 
     // Create connection options with create_if_missing
     let options = SqliteConnectOptions::from_str(&format!("sqlite:{}", db_path.display()))

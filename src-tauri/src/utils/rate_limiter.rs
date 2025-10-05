@@ -3,6 +3,27 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+/// Error returned when a request is rate limited
+///
+/// Contains the number of seconds to wait before the next request will be allowed
+#[derive(Debug, Clone, Copy)]
+pub struct RateLimitError {
+    /// Remaining seconds to wait before next request
+    pub wait_seconds: f64,
+}
+
+impl RateLimitError {
+    /// Create a new rate limit error with the given wait time
+    pub fn new(wait_seconds: f64) -> Self {
+        Self { wait_seconds }
+    }
+
+    /// Get the wait time in seconds
+    pub fn seconds(&self) -> f64 {
+        self.wait_seconds
+    }
+}
+
 pub struct RateLimiter {
     last_request: Mutex<Instant>,
     min_interval: Duration,
@@ -23,7 +44,7 @@ impl RateLimiter {
     ///
     /// # Returns
     /// - `Ok(())` if the request is allowed (enough time has passed)
-    /// - `Err(f64)` with remaining seconds to wait if rate limited
+    /// - `Err(RateLimitError)` with remaining seconds to wait if rate limited
     ///
     /// # Examples
     /// ```no_run
@@ -32,10 +53,10 @@ impl RateLimiter {
     /// let limiter = RateLimiter::new(2000); // 2 second minimum interval
     /// match limiter.check_and_update() {
     ///     Ok(()) => println!("Request allowed"),
-    ///     Err(secs) => println!("Rate limited, wait {:.1}s", secs),
+    ///     Err(err) => println!("Rate limited, wait {:.1}s", err.seconds()),
     /// }
     /// ```
-    pub fn check_and_update(&self) -> Result<(), f64> {
+    pub fn check_and_update(&self) -> Result<(), RateLimitError> {
         let mut last = match self.last_request.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
@@ -47,7 +68,7 @@ impl RateLimiter {
 
         if now.duration_since(*last) < self.min_interval {
             let remaining = self.min_interval - now.duration_since(*last);
-            return Err(remaining.as_secs_f64());
+            return Err(RateLimitError::new(remaining.as_secs_f64()));
         }
 
         *last = now;
@@ -61,7 +82,7 @@ impl RateLimiter {
     ///
     /// # Returns
     /// - `Ok(())` if a request would be allowed
-    /// - `Err(f64)` with remaining seconds to wait if currently rate limited
+    /// - `Err(RateLimitError)` with remaining seconds to wait if currently rate limited
     ///
     /// # Examples
     /// ```no_run
@@ -72,7 +93,7 @@ impl RateLimiter {
     ///     // Safe to proceed, can call check_and_update()
     /// }
     /// ```
-    pub fn check(&self) -> Result<(), f64> {
+    pub fn check(&self) -> Result<(), RateLimitError> {
         let last = match self.last_request.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
@@ -84,7 +105,7 @@ impl RateLimiter {
 
         if now.duration_since(*last) < self.min_interval {
             let remaining = self.min_interval - now.duration_since(*last);
-            return Err(remaining.as_secs_f64());
+            return Err(RateLimitError::new(remaining.as_secs_f64()));
         }
 
         Ok(())
@@ -157,5 +178,37 @@ mod tests {
 
         // Check again (should still fail, timestamp unchanged)
         assert!(limiter.check().is_err());
+    }
+
+    #[test]
+    fn test_mutex_poison_recovery() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let limiter = Arc::new(RateLimiter::new(100));
+        let limiter_clone = Arc::clone(&limiter);
+
+        // Spawn a thread that poisons the mutex by panicking while holding the lock
+        let handle = thread::spawn(move || {
+            let _guard = limiter_clone.last_request.lock().unwrap();
+            panic!("Intentionally poisoning mutex for test");
+        });
+
+        // Wait for thread to panic and poison the mutex
+        let _ = handle.join();
+
+        // The mutex is now poisoned, but our implementation should recover
+        // All three methods should still work
+        assert!(limiter.check_and_update().is_ok(), "check_and_update should recover from poison");
+
+        // Wait for interval to test check() and reset()
+        sleep(Duration::from_millis(110));
+
+        assert!(limiter.check().is_ok(), "check should recover from poison");
+
+        limiter.reset(); // Should not panic even with poisoned mutex
+
+        // Verify functionality is maintained after recovery
+        assert!(limiter.check_and_update().is_ok(), "should work normally after poison recovery");
     }
 }
