@@ -120,7 +120,8 @@ interface ListTransactionsRequest {
   category_id?: number;
   start_date?: string;         // ISO 8601 format
   end_date?: string;
-  limit?: number;              // Default 100
+  search?: string;             // Optional: Search description/merchant (FR-016)
+  limit?: number;              // Default 25 per page (spec FR-014)
   offset?: number;             // For pagination
 }
 ```
@@ -328,3 +329,294 @@ it('should export transactions to CSV', async () => {
   expect(response.file_path).toBe('/tmp/export.csv');
 });
 ```
+
+---
+
+## Command: `search_transactions`
+Search transactions by description or merchant text with debounce.
+
+### Request
+```typescript
+interface SearchTransactionsRequest {
+  query: string;               // Search text (min 1 character)
+  account_id?: number;         // Optional: Filter by account
+  category_id?: number;        // Optional: Filter by category
+  start_date?: string;         // Optional: Date range filter
+  end_date?: string;
+  limit?: number;              // Default 25
+  offset?: number;
+}
+```
+
+### Response
+```typescript
+interface SearchTransactionsResponse {
+  transactions: Transaction[];
+  total_count: number;
+  query: string;               // Echo back search query
+}
+```
+
+### Behavior
+- **Case-insensitive** substring matching on `description` and `merchant` fields
+- **Real-time filtering** with 500ms debounce (per spec FR-017) - implemented in frontend
+- Returns transactions where query appears in EITHER description OR merchant
+- Empty query returns all transactions (same as list_transactions)
+
+### Errors
+- `ValidationError`: Query too long (>100 characters)
+
+### Contract Test
+```typescript
+describe('search_transactions command', () => {
+  it('should search by description substring', async () => {
+    // Assume transaction exists with description "Grocery shopping at Whole Foods"
+    const response = await invoke('search_transactions', {
+      query: 'grocery'
+    });
+
+    expect(response.transactions.length).toBeGreaterThan(0);
+    expect(response.transactions[0].description.toLowerCase()).toContain('grocery');
+  });
+
+  it('should search by merchant substring', async () => {
+    // Transaction with merchant "Starbucks Coffee"
+    const response = await invoke('search_transactions', {
+      query: 'starbucks'
+    });
+
+    expect(response.transactions.some(t =>
+      t.merchant?.toLowerCase().includes('starbucks')
+    )).toBe(true);
+  });
+
+  it('should be case-insensitive', async () => {
+    const response = await invoke('search_transactions', {
+      query: 'WHOLE FOODS'
+    });
+
+    expect(response.transactions.length).toBeGreaterThan(0);
+  });
+
+  it('should support pagination', async () => {
+    const response = await invoke('search_transactions', {
+      query: 'store',
+      limit: 5,
+      offset: 0
+    });
+
+    expect(response.transactions.length).toBeLessThanOrEqual(5);
+    expect(response.total_count).toBeDefined();
+  });
+});
+```
+
+---
+
+## Command: `delete_transaction`
+Delete a single transaction.
+
+### Request
+```typescript
+interface DeleteTransactionRequest {
+  id: number;                  // Transaction ID to delete
+}
+```
+
+### Response
+```typescript
+interface DeleteTransactionResponse {
+  success: boolean;
+  deleted_transaction_id: number;
+}
+```
+
+### Behavior
+- **Confirmation**: Frontend SHOULD show confirmation dialog before calling (per spec FR-050)
+- Permanently removes transaction from database
+- Updates account balance calculations
+
+### Errors
+- `TransactionNotFound`: Transaction ID doesn't exist
+
+### Contract Test
+```typescript
+describe('delete_transaction command', () => {
+  it('should delete transaction successfully', async () => {
+    const transactions = await invoke('list_transactions', { limit: 1 });
+    const transactionId = transactions.transactions[0].id;
+
+    const response = await invoke('delete_transaction', { id: transactionId });
+
+    expect(response.success).toBe(true);
+    expect(response.deleted_transaction_id).toBe(transactionId);
+
+    // Verify transaction no longer exists
+    const updated = await invoke('list_transactions');
+    expect(updated.transactions.find(t => t.id === transactionId)).toBeUndefined();
+  });
+
+  it('should fail if transaction not found', async () => {
+    await expect(
+      invoke('delete_transaction', { id: 99999 })
+    ).rejects.toThrow('TransactionNotFound');
+  });
+});
+```
+
+---
+
+## Command: `bulk_delete_transactions`
+Delete multiple selected transactions in one operation.
+
+### Request
+```typescript
+interface BulkDeleteTransactionsRequest {
+  transaction_ids: number[];   // Array of transaction IDs to delete
+}
+```
+
+### Response
+```typescript
+interface BulkDeleteTransactionsResponse {
+  success: boolean;
+  deleted_count: number;
+  failed_ids: number[];        // IDs that couldn't be deleted
+}
+```
+
+### Behavior
+- **Confirmation REQUIRED**: Frontend MUST show confirmation dialog with count before calling (per spec FR-051)
+- Deletes transactions in a single database transaction (all or none on error)
+- Skips non-existent IDs and reports them in `failed_ids`
+- Maximum 1000 IDs per request (safety limit)
+
+### Errors
+- `ValidationError`: Empty array or exceeds 1000 IDs
+- `DatabaseError`: Transaction rollback on failure
+
+### Contract Test
+```typescript
+describe('bulk_delete_transactions command', () => {
+  it('should delete multiple transactions', async () => {
+    const transactions = await invoke('list_transactions', { limit: 3 });
+    const ids = transactions.transactions.map(t => t.id);
+
+    const response = await invoke('bulk_delete_transactions', {
+      transaction_ids: ids
+    });
+
+    expect(response.success).toBe(true);
+    expect(response.deleted_count).toBe(3);
+    expect(response.failed_ids).toEqual([]);
+
+    // Verify all deleted
+    const updated = await invoke('list_transactions');
+    ids.forEach(id => {
+      expect(updated.transactions.find(t => t.id === id)).toBeUndefined();
+    });
+  });
+
+  it('should report failed deletions', async () => {
+    const response = await invoke('bulk_delete_transactions', {
+      transaction_ids: [1, 99999, 2]  // 99999 doesn't exist
+    });
+
+    expect(response.failed_ids).toContain(99999);
+  });
+
+  it('should reject requests over 1000 IDs', async () => {
+    const manyIds = Array.from({ length: 1001 }, (_, i) => i);
+
+    await expect(
+      invoke('bulk_delete_transactions', { transaction_ids: manyIds })
+    ).rejects.toThrow('ValidationError');
+  });
+});
+```
+
+---
+
+## Command: `bulk_update_category`
+Update category for multiple selected transactions.
+
+### Request
+```typescript
+interface BulkUpdateCategoryRequest {
+  transaction_ids: number[];   // Array of transaction IDs
+  category_id: number;         // New category to assign
+}
+```
+
+### Response
+```typescript
+interface BulkUpdateCategoryResponse {
+  success: boolean;
+  updated_count: number;
+  failed_ids: number[];        // IDs that couldn't be updated
+}
+```
+
+### Behavior
+- Updates all specified transactions to new category in single operation
+- Skips non-existent transaction IDs and reports in `failed_ids`
+- Validates category_id exists before updating
+- Maximum 1000 IDs per request (safety limit)
+
+### Errors
+- `ValidationError`: Empty array or exceeds 1000 IDs
+- `CategoryNotFound`: category_id doesn't exist
+- `DatabaseError`: Transaction rollback on failure
+
+### Contract Test
+```typescript
+describe('bulk_update_category command', () => {
+  it('should update category for multiple transactions', async () => {
+    const transactions = await invoke('list_transactions', { limit: 3 });
+    const ids = transactions.transactions.map(t => t.id);
+    const newCategory = await invoke('create_category', { name: 'Bulk Test' });
+
+    const response = await invoke('bulk_update_category', {
+      transaction_ids: ids,
+      category_id: newCategory.category_id
+    });
+
+    expect(response.success).toBe(true);
+    expect(response.updated_count).toBe(3);
+
+    // Verify all updated
+    const updated = await invoke('list_transactions');
+    ids.forEach(id => {
+      const transaction = updated.transactions.find(t => t.id === id);
+      expect(transaction.category_id).toBe(newCategory.category_id);
+    });
+  });
+
+  it('should reject invalid category', async () => {
+    await expect(
+      invoke('bulk_update_category', { transaction_ids: [1, 2], category_id: 99999 })
+    ).rejects.toThrow('CategoryNotFound');
+  });
+
+  it('should report failed updates', async () => {
+    const category = await invoke('create_category', { name: 'Test' });
+
+    const response = await invoke('bulk_update_category', {
+      transaction_ids: [1, 99999, 2],
+      category_id: category.category_id
+    });
+
+    expect(response.failed_ids).toContain(99999);
+  });
+});
+```
+
+---
+
+## Notes
+
+- **Pagination**: Default page size is 25 transactions (spec FR-014), frontend displays pagination controls (spec FR-015)
+- **Search debounce**: 500ms delay implemented in frontend (spec FR-017) to avoid excessive backend calls
+- **Confirmation dialogs**: Frontend MUST confirm all delete operations showing affected count (spec FR-050, FR-051)
+- **Bulk operation limits**: Maximum 1000 IDs per bulk request to prevent performance issues
+- **Transaction integrity**: All bulk operations use database transactions (atomic all-or-none)

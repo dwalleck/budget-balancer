@@ -393,3 +393,100 @@ it('should compare avalanche vs snowball strategies', async () => {
   );
 });
 ```
+
+---
+
+## Command: `delete_debt`
+Delete a debt account and its associated payment history.
+
+### Request
+```typescript
+interface DeleteDebtRequest {
+  id: number;                      // Debt ID to delete
+}
+```
+
+### Response
+```typescript
+interface DeleteDebtResponse {
+  success: boolean;
+  deleted_debt_id: number;
+  deleted_payments_count: number;  // Count of associated debt_payments deleted
+  deleted_plan_items_count: number; // Count of debt_plan items deleted
+}
+```
+
+### Behavior
+- **Cascade Delete**: All associated debt_payments and debt_plan_payments are automatically deleted
+- **Confirmation**: Frontend SHOULD show confirmation dialog before calling (per spec FR-050)
+- Permanently removes debt and all related records
+- Does NOT affect transactions (debt payments are separate from transaction records)
+
+### Errors
+- `DebtNotFound`: Debt ID doesn't exist
+
+### Contract Test
+```typescript
+describe('delete_debt command', () => {
+  it('should delete debt and cascade delete associated records', async () => {
+    // Create debt and payment plan
+    const debt = await invoke('create_debt', {
+      name: 'To Delete',
+      balance: 1000,
+      interest_rate: 15.0,
+      min_payment: 50
+    });
+
+    await invoke('calculate_payoff_plan', {
+      strategy: 'avalanche',
+      monthly_amount: 500
+    });
+
+    await invoke('record_debt_payment', {
+      debt_id: debt.debt_id,
+      amount: 100,
+      date: '2025-01-01'
+    });
+
+    const response = await invoke('delete_debt', { id: debt.debt_id });
+
+    expect(response.success).toBe(true);
+    expect(response.deleted_debt_id).toBe(debt.debt_id);
+    expect(response.deleted_payments_count).toBeGreaterThan(0);
+
+    // Verify debt no longer exists
+    const debts = await invoke('list_debts');
+    expect(debts.debts.find(d => d.id === debt.debt_id)).toBeUndefined();
+  });
+
+  it('should return zero counts if no associated records', async () => {
+    const debt = await invoke('create_debt', {
+      name: 'Simple Debt',
+      balance: 500,
+      interest_rate: 10.0,
+      min_payment: 25
+    });
+
+    const response = await invoke('delete_debt', { id: debt.debt_id });
+
+    expect(response.success).toBe(true);
+    expect(response.deleted_payments_count).toBe(0);
+    expect(response.deleted_plan_items_count).toBe(0);
+  });
+
+  it('should fail if debt not found', async () => {
+    await expect(
+      invoke('delete_debt', { id: 99999 })
+    ).rejects.toThrow('DebtNotFound');
+  });
+});
+```
+
+---
+
+## Notes
+
+- **Debt plans are recalculated** automatically when debts change (create, update, or delete)
+- **Confirmation dialogs**: Frontend SHOULD confirm debt deletion showing impact (per spec FR-050)
+- **Cascade behavior**: Deleting a debt removes ALL associated records (payments, plan items)
+- **Active plans**: If a debt is part of an active payoff plan, deleting it will trigger plan recalculation for remaining debts

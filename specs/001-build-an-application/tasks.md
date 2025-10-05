@@ -2,426 +2,563 @@
 
 **Input**: Design documents from `/home/dwalleck/repos/budget-balancer/specs/001-build-an-application/`
 **Prerequisites**: plan.md, research.md, data-model.md, contracts/, quickstart.md
-
-## Execution Flow (main)
-```
-1. Load plan.md from feature directory
-   → If not found: ERROR "No implementation plan found"
-   → Extract: tech stack, libraries, structure
-2. Load optional design documents:
-   → data-model.md: Extract entities → model tasks
-   → contracts/: Each file → contract test task
-   → research.md: Extract decisions → setup tasks
-3. Generate tasks by category:
-   → Setup: project init, dependencies, linting
-   → Tests: contract tests, integration tests
-   → Core: models, services, CLI commands
-   → Integration: DB, middleware, logging
-   → Polish: unit tests, performance, docs
-4. Apply task rules:
-   → Different files = mark [P] for parallel
-   → Same file = sequential (no [P])
-   → Tests before implementation (TDD)
-5. Number tasks sequentially (T001, T002...)
-6. Generate dependency graph
-7. Create parallel execution examples
-8. Validate task completeness:
-   → All contracts have tests?
-   → All entities have models?
-   → All endpoints implemented?
-9. Return: SUCCESS (tasks ready for execution)
-```
+**Tech Stack**: TypeScript 5.x / React 18 + Tauri 2, Radix UI, Tailwind CSS, Vite, Zustand, Vitest, SQLite
 
 ## Format: `[ID] [P?] Description`
 - **[P]**: Can run in parallel (different files, no dependencies)
-- Include exact file paths in descriptions
-
-## Path Conventions
-- Desktop app structure (Tauri + React)
-- Backend: `src-tauri/src/` for Rust code
-- Frontend: `src/` for React code
-- Tests: `src-tauri/tests/` and `tests/` respectively
+- All tasks follow TDD: tests before implementation
 
 ---
 
-## Phase 3.1: Setup & Infrastructure
+## Phase 3.1: Setup & Database Foundation
 
-- [x] **T001** [P] Initialize Tauri 2 project structure with React + TypeScript template
-- [x] **T002** [P] Configure package.json with dependencies: Tauri 2, React 18, Radix UI, Tailwind CSS, Vite, Zustand, Vitest
-- [x] **T003** [P] Set up Tailwind CSS configuration with Opcode-inspired theme (src/tailwind.config.js)
-- [x] **T004** [P] Configure Vite build settings for Tauri (vite.config.ts)
-- [x] **T005** [P] Set up ESLint and Prettier with TypeScript rules (.eslintrc.js, .prettierrc)
-- [x] **T006** [P] Configure Vitest for unit and integration testing (vitest.config.ts)
-- [x] **T007** Create SQLite database schema migration file (src-tauri/migrations/001_initial_schema.sql)
-- [x] **T008** [P] Set up Tauri SQL plugin configuration (src-tauri/tauri.conf.json)
-- [x] **T009** Implement database initialization with sqlx::migrate!() in app setup (src-tauri/src/lib.rs)
-  - Uses sqlx::migrate!() macro to run migrations at app startup
-  - Connects to database in app data directory using dirs crate
-  - Handles multi-statement SQL files automatically
-  - Migration state tracked in _sqlx_migrations table
-- [x] **T010** Seed predefined categories and category rules (src-tauri/src/db/seed.rs)
+- [x] T001 Initialize Tauri 2 project structure with React frontend and Rust backend per plan.md structure
+- [x] T002 Configure dependencies: React 18, Radix UI, Tailwind CSS, Vite, Zustand, Vitest in package.json
+- [x] T003 Configure Rust dependencies: tauri, sqlx, tokio, serde in src-tauri/Cargo.toml
+- [x] T004 [P] Set up ESLint and Prettier for TypeScript/React in .eslintrc and .prettierrc
+- [x] T005 [P] Set up Clippy and rustfmt for Rust in src-tauri/.cargo/config.toml
+- [x] T006 Create SQLite schema migrations in src-tauri/migrations/001_initial_schema.sql with all 8 tables from data-model.md
+- [x] T007 Implement database initialization with connection pooling (DbPool, max 5 connections) in src-tauri/src/db/mod.rs
+- [x] T008 Seed predefined categories and category_rules in src-tauri/src/db/seed.rs
+- [x] T009 Create constants module in src-tauri/src/constants.rs (DEFAULT_CATEGORY_ID, MAX_CSV_ROWS, etc.)
+- [x] T010 Set up Vitest configuration with Tauri mocks in vitest.config.ts
+- [x] T011 Configure cargo-llvm-cov for backend test coverage in src-tauri/Cargo.toml
+- [ ] T011a **[PRIORITY]** Set up GitHub Actions CI/CD workflow in .github/workflows/ci.yml
+  - Build for all platforms (Windows, macOS, Linux)
+  - Run linters (ESLint, Prettier, Clippy, rustfmt)
+  - Execute backend tests (cargo test) - **continue on test failure**
+  - Execute frontend tests (bun test) - **continue on test failure**
+  - **BLOCK on build failures** (compilation errors)
+  - Generate test reports and upload as artifacts
 
-## Phase 3.2: Data Models & Database Layer ⚠️ MUST COMPLETE BEFORE 3.3
+### Code Quality & Best Practices (Based on Audit)
+- [ ] T011b **[CRITICAL]** Fix production unwrap() usage in Rust code
+  - Replace unwrap() in avalanche_calculator.rs:81 with unwrap_or(Ordering::Equal)
+  - Replace unwrap() in snowball_calculator.rs:65 with unwrap_or(Ordering::Equal)
+  - Fix Mutex unwrap() in rate_limiter.rs:193 with proper error handling
+- [ ] T011c **[CRITICAL]** Fix TypeScript any types in visualization components
+  - Create proper interfaces for Recharts props in SpendingPieChart.tsx
+  - Create proper interfaces for Recharts props in SpendingBarChart.tsx
+  - Create proper interfaces for Recharts props in TrendsLineChart.tsx
+  - Fix any type in AccountCreationDialog.tsx:75
+- [ ] T011d **[HIGH]** Fix ESLint warnings and errors
+  - Remove unused variables (prefix with _ or remove imports)
+  - Fix useEffect dependency warnings in TransactionList.tsx and TransactionsPage.tsx
+  - Run `bun run lint --fix` for auto-fixable issues
+- [ ] T011e **[HIGH]** Fix Clippy warnings in Rust code
+  - Fix manual range contains in debt_commands.rs:158
+  - Fix unnecessary lazy evaluation in debt_commands.rs:318
+  - Run `cargo clippy --fix` for auto-fixable issues
+- [ ] T011f [P] Add React.memo to expensive components
+  - Memoize SpendingPieChart component
+  - Memoize SpendingBarChart component
+  - Memoize TrendsLineChart component
+- [ ] T011g [P] Add documentation to public Rust APIs
+  - Add /// comments to all public service functions
+  - Add examples for complex debt calculation algorithms
+  - Document error cases for command handlers
+- [ ] T011h [P] Add JSDoc to public React components
+  - Document props and usage for all page components
+  - Add examples for complex components (charts, forms)
+  - Document custom hooks
 
-- [x] **T011** [P] Create Transaction model struct (src-tauri/src/models/transaction.rs)
-- [x] **T012** [P] Create Account model struct (src-tauri/src/models/account.rs)
-- [x] **T013** [P] Create Category model struct (src-tauri/src/models/category.rs)
-- [x] **T014** [P] Create CategoryRule model struct (src-tauri/src/models/category_rule.rs)
-- [x] **T015** [P] Create Debt model struct (src-tauri/src/models/debt.rs)
-- [x] **T016** [P] Create DebtPayment model struct (included in src-tauri/src/models/debt.rs)
-- [x] **T017** [P] Create DebtPlan model struct (included in src-tauri/src/models/debt.rs)
-- [x] **T018** [P] Create SpendingTarget model struct (src-tauri/src/models/spending_target.rs)
-- [x] **T019** [P] Create ColumnMapping model struct (src-tauri/src/models/column_mapping.rs)
-- [x] **T020** [P] Implement database repository for transactions (src-tauri/src/db/transactions_repo.rs)
-- [x] **T021** [P] Implement database repository for debts (src-tauri/src/db/debts_repo.rs)
-- [x] **T022** [P] Implement database repository for categories (src-tauri/src/db/categories_repo.rs)
+---
 
-## Phase 3.3: Contract Tests (TDD) ⚠️ MUST COMPLETE BEFORE 3.4
+## Phase 3.2: Backend - Data Models
 
-### Transaction Commands
-- [x] **T023** [P] Contract test for `import_csv` command (src-tauri/tests/integration/test_import_csv.rs) - 8 tests
-- [x] **T024** [P] Contract test for `save_column_mapping` command (src-tauri/tests/integration/test_column_mapping.rs)
-- [x] **T025** [P] Contract test for `list_transactions` command (src-tauri/tests/integration/test_transaction_commands.rs) - 7 tests
-- [x] **T026** [P] Contract test for `update_transaction_category` command (src-tauri/tests/integration/test_transaction_commands.rs)
-- [x] **T027** [P] Contract test for `categorize_transaction` command (src-tauri/tests/integration/test_categorize.rs)
-- [x] **T028** [P] Contract test for `create_category` command (src-tauri/tests/integration/test_category_commands.rs) - 5 tests
-- [x] **T029** [P] Contract test for `export_transactions` command (src-tauri/tests/integration/test_export_transactions.rs)
+### Data Models & Database Layer
+- [x] T012 [P] Create Account model in src-tauri/src/models/account.rs
+- [x] T013 [P] Create Transaction model with hash generation in src-tauri/src/models/transaction.rs
+- [x] T014 [P] Create Category model in src-tauri/src/models/category.rs
+- [x] T015 [P] Create CategoryRule model in src-tauri/src/models/category_rule.rs
+- [x] T016 [P] Create ColumnMapping model in src-tauri/src/models/column_mapping.rs
+- [x] T017 [P] Create Debt model in src-tauri/src/models/debt.rs
+- [x] T018 [P] Create DebtPayment model in src-tauri/src/models/debt_payment.rs
+- [x] T019 [P] Create SpendingTarget model in src-tauri/src/models/spending_target.rs
 
-### Account Commands (Added during MVP development)
-- [x] **T023a** [P] Contract test for `create_account` command (src-tauri/tests/integration/test_account_commands.rs) - 3 tests
-- [x] **T023b** [P] Contract test for `list_accounts` command (src-tauri/tests/integration/test_account_commands.rs) - 2 tests
+---
 
-**Test Summary**: 22 passing, 2 ignored (empty CSV validation, invalid date validation)
+## Phase 3.3: Backend - Contract Tests (TDD) ⚠️ MUST COMPLETE BEFORE 3.4
 
-### Debt Commands
-- [x] **T030** [P] Contract test for `create_debt` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T031** [P] Contract test for `list_debts` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T032** [P] Contract test for `update_debt` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T033** [P] Contract test for `calculate_payoff_plan` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T034** [P] Contract test for `get_payoff_plan` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T035** [P] Contract test for `record_debt_payment` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T036** [P] Contract test for `get_debt_progress` command (src-tauri/tests/integration/test_debt_commands.rs)
-- [x] **T037** [P] Contract test for `compare_strategies` command (src-tauri/tests/integration/test_debt_commands.rs)
+**CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation**
 
-### Analytics Commands
-- [x] **T038** [P] Contract test for `get_spending_by_category` command (src-tauri/tests/integration/test_spending_by_category.rs)
-- [x] **T039** [P] Contract test for `get_spending_trends` command (src-tauri/tests/integration/test_spending_trends.rs)
-- [x] **T040** [P] Contract test for `get_spending_targets_progress` command (src-tauri/tests/integration/test_targets_progress.rs)
-- [x] **T041** [P] Contract test for `create_spending_target` command (src-tauri/tests/integration/test_create_target.rs)
-- [x] **T042** [P] Contract test for `update_spending_target` command (src-tauri/tests/integration/test_update_target.rs)
-- [x] **T043** [P] Contract test for `get_dashboard_summary` command (src-tauri/tests/integration/test_dashboard.rs)
-- [x] **T044** [P] Contract test for `export_analytics_report` command (src-tauri/tests/integration/test_export_report.rs)
+### Account Management Tests (contracts/accounts.md - 4 commands)
+- [x] T020 [P] Contract test for create_account command in src-tauri/tests/integration/accounts_test.rs
+- [x] T021 [P] Contract test for list_accounts command in src-tauri/tests/integration/accounts_test.rs
+- [ ] T022 [P] Contract test for update_account command in src-tauri/tests/integration/accounts_test.rs
+- [ ] T023 [P] Contract test for delete_account with cascade in src-tauri/tests/integration/accounts_test.rs
 
-## Phase 3.4: Backend Services (ONLY after contract tests fail)
+### Transaction Management Tests (contracts/transactions.md - 11 commands)
+- [x] T024 [P] Contract test for import_csv command in src-tauri/tests/integration/transactions_test.rs
+- [x] T025 [P] Contract test for list_transactions with pagination (25/page) in src-tauri/tests/integration/transactions_test.rs
+- [ ] T026 [P] Contract test for search_transactions with debounce in src-tauri/tests/integration/transactions_test.rs
+- [x] T027 [P] Contract test for update_transaction_category command in src-tauri/tests/integration/transactions_test.rs
+- [ ] T028 [P] Contract test for delete_transaction command in src-tauri/tests/integration/transactions_test.rs
+- [ ] T029 [P] Contract test for bulk_delete_transactions (max 1000 IDs) in src-tauri/tests/integration/transactions_test.rs
+- [ ] T030 [P] Contract test for bulk_update_category command in src-tauri/tests/integration/transactions_test.rs
+- [x] T031 [P] Contract test for categorize_transaction with rules in src-tauri/tests/integration/transactions_test.rs
+- [x] T032 [P] Contract test for export_transactions to CSV/JSON in src-tauri/tests/integration/transactions_test.rs
+- [ ] T033 [P] Contract test for save_column_mapping with upsert in src-tauri/tests/integration/column_mappings_test.rs
+- [ ] T034 [P] Contract test for create_category command in src-tauri/tests/integration/categories_test.rs
 
-### CSV & Transaction Services
-- [x] **T045** Implement CSV parsing service with column mapping (src-tauri/src/services/csv_parser.rs)
-- [x] **T046** Implement duplicate detection service using hash (src-tauri/src/services/duplicate_detector.rs)
-- [x] **T047** Implement categorization service with keyword matching (src-tauri/src/services/categorizer.rs)
-- [x] **T048** Implement transaction import service (src-tauri/src/services/transaction_importer.rs)
+### Category Management Tests (contracts/categories.md - 4 commands)
+- [ ] T035 [P] Contract test for create_category (custom) in src-tauri/tests/integration/categories_test.rs
+- [ ] T036 [P] Contract test for list_categories with type filter in src-tauri/tests/integration/categories_test.rs
+- [ ] T037 [P] Contract test for update_category (custom only) in src-tauri/tests/integration/categories_test.rs
+- [ ] T038 [P] Contract test for delete_category with reassignment to Uncategorized in src-tauri/tests/integration/categories_test.rs
 
-### Debt Calculation Services
-- [x] **T049** Implement avalanche payoff algorithm (src-tauri/src/services/avalanche_calculator.rs)
-- [x] **T050** Implement snowball payoff algorithm (src-tauri/src/services/snowball_calculator.rs)
-- [x] **T051** Implement debt payment scheduler (src-tauri/src/services/payment_scheduler.rs)
-- [x] **T052** Implement interest calculation utilities (src-tauri/src/services/interest_calculator.rs)
+### Category Rules Tests (contracts/category_rules.md - 4 commands)
+- [ ] T039 [P] Contract test for create_category_rule with pattern normalization in src-tauri/tests/integration/category_rules_test.rs
+- [ ] T040 [P] Contract test for list_category_rules ordered by priority in src-tauri/tests/integration/category_rules_test.rs
+- [ ] T041 [P] Contract test for update_category_rule command in src-tauri/tests/integration/category_rules_test.rs
+- [ ] T042 [P] Contract test for delete_category_rule command in src-tauri/tests/integration/category_rules_test.rs
 
-### Analytics Services
-- [x] **T053** Implement spending aggregation service (src-tauri/src/services/spending_aggregator.rs)
-- [x] **T054** Implement trends calculation service (src-tauri/src/services/trends_calculator.rs)
-- [x] **T055** Implement target progress tracking service (src-tauri/src/services/target_tracker.rs)
+### Column Mapping Tests (contracts/column_mappings.md - 5 commands)
+- [ ] T043 [P] Contract test for save_column_mapping with upsert behavior in src-tauri/tests/integration/column_mappings_test.rs
+- [ ] T044 [P] Contract test for list_column_mappings sorted by name in src-tauri/tests/integration/column_mappings_test.rs
+- [ ] T045 [P] Contract test for get_column_mapping by ID or source_name in src-tauri/tests/integration/column_mappings_test.rs
+- [ ] T046 [P] Contract test for update_column_mapping command in src-tauri/tests/integration/column_mappings_test.rs
+- [ ] T047 [P] Contract test for delete_column_mapping command in src-tauri/tests/integration/column_mappings_test.rs
 
-## Phase 3.5: Tauri Commands Implementation
+### Debt Management Tests (contracts/debts.md - 9 commands)
+- [x] T048 [P] Contract test for create_debt command in src-tauri/tests/integration/debts_test.rs
+- [x] T049 [P] Contract test for list_debts command in src-tauri/tests/integration/debts_test.rs
+- [x] T050 [P] Contract test for update_debt command in src-tauri/tests/integration/debts_test.rs
+- [ ] T051 [P] Contract test for delete_debt with cascade in src-tauri/tests/integration/debts_test.rs
+- [x] T052 [P] Contract test for calculate_payoff_plan avalanche strategy in src-tauri/tests/integration/debts_test.rs
+- [x] T053 [P] Contract test for calculate_payoff_plan snowball strategy in src-tauri/tests/integration/debts_test.rs
+- [x] T054 [P] Contract test for get_payoff_plan command in src-tauri/tests/integration/debts_test.rs
+- [x] T055 [P] Contract test for record_debt_payment command in src-tauri/tests/integration/debts_test.rs
+- [x] T056 [P] Contract test for get_debt_progress with payment history in src-tauri/tests/integration/debts_test.rs
+- [x] T057 [P] Contract test for compare_strategies avalanche vs snowball in src-tauri/tests/integration/debts_test.rs
 
-### Transaction Commands
-- [x] **T056** Implement `import_csv` Tauri command (src-tauri/src/commands/csv_commands.rs)
-- [x] **T057** Implement `save_column_mapping` Tauri command (src-tauri/src/commands/csv_commands.rs)
-- [x] **T058** Implement `list_transactions` Tauri command (src-tauri/src/commands/transaction_commands.rs)
-- [x] **T059** Implement `update_transaction_category` Tauri command (src-tauri/src/commands/transaction_commands.rs)
-- [x] **T060** Implement `categorize_transaction` Tauri command (src-tauri/src/commands/transaction_commands.rs)
-- [x] **T061** Implement `create_category` and `list_categories` commands (src-tauri/src/commands/category_commands.rs)
-- [x] **T062** Implement `export_transactions` Tauri command (src-tauri/src/commands/transaction_commands.rs)
+### Analytics Tests (contracts/analytics.md - 7 commands)
+- [x] T058 [P] Contract test for get_spending_by_category with percentages in src-tauri/tests/integration/analytics_test.rs
+- [x] T059 [P] Contract test for get_spending_trends by interval in src-tauri/tests/integration/analytics_test.rs
+- [x] T060 [P] Contract test for get_spending_targets_progress with status in src-tauri/tests/integration/analytics_test.rs
+- [x] T061 [P] Contract test for create_spending_target command in src-tauri/tests/integration/analytics_test.rs
+- [x] T062 [P] Contract test for update_spending_target command in src-tauri/tests/integration/analytics_test.rs
+- [x] T063 [P] Contract test for get_dashboard_summary command in src-tauri/tests/integration/analytics_test.rs
+- [x] T064 [P] Contract test for export_analytics_report to PDF/XLSX in src-tauri/tests/integration/analytics_test.rs
 
-### Account Commands (Added during MVP development)
-- [x] **T056a** Implement `create_account` Tauri command (src-tauri/src/commands/account_commands.rs)
-- [x] **T056b** Implement `list_accounts` Tauri command (src-tauri/src/commands/account_commands.rs)
-- [x] **T056c** Implement `get_csv_headers` helper command (src-tauri/src/commands/csv_commands.rs)
+---
 
-### Debt Commands
-- [x] **T063** Implement `create_debt` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T064** Implement `list_debts` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T065** Implement `update_debt` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T066** Implement `calculate_payoff_plan` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T067** Implement `get_payoff_plan` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T068** Implement `record_debt_payment` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T069** Implement `get_debt_progress` Tauri command (src-tauri/src/commands/debt_commands.rs)
-- [x] **T070** Implement `compare_strategies` Tauri command (src-tauri/src/commands/debt_commands.rs)
+## Phase 3.4: Backend - Services & Commands Implementation (ONLY after tests fail)
 
-### Analytics Commands
-- [x] **T071** Implement `get_spending_by_category` Tauri command (src-tauri/src/commands/analytics_commands.rs)
-- [x] **T072** Implement `get_spending_trends` Tauri command (src-tauri/src/commands/analytics_commands.rs)
-- [x] **T073** Implement `get_spending_targets_progress` Tauri command (src-tauri/src/commands/analytics_commands.rs)
-- [x] **T074** Implement `create_spending_target` Tauri command (src-tauri/src/commands/analytics_commands.rs)
-- [x] **T075** Implement `update_spending_target` Tauri command (src-tauri/src/commands/analytics_commands.rs)
-- [x] **T076** Implement `get_dashboard_summary` Tauri command (src-tauri/src/commands/analytics_commands.rs)
-- [x] **T077** Implement `export_analytics_report` Tauri command (src-tauri/src/commands/analytics_commands.rs)
+### Account Services & Commands
+- [ ] T065 Create AccountService with CRUD operations in src-tauri/src/services/account_service.rs
+- [ ] T066 Implement account commands (create, list, update, delete) in src-tauri/src/commands/accounts.rs
 
-### Command Registration
-- [x] **T078** Register all implemented commands in Tauri builder (src-tauri/src/lib.rs)
-  - Registered: get_csv_headers, import_csv, list_transactions, update_transaction_category
-  - Registered: list_categories, create_category, list_accounts, create_account
+### Category Services & Commands
+- [ ] T067 Create CategoryService with predefined protection in src-tauri/src/services/category_service.rs
+- [ ] T068 Implement category commands (create, list, update, delete) in src-tauri/src/commands/categories.rs
 
-## Phase 3.6: Frontend - Base Components & State
+### Category Rule Services & Commands
+- [ ] T069 Create CategoryRuleService with pattern matching in src-tauri/src/services/category_rule_service.rs
+- [ ] T070 Implement category_rule commands (create, list, update, delete) in src-tauri/src/commands/category_rules.rs
 
-- [x] **T079** [P] Create Radix UI wrapper components (src/components/ui/button.tsx, card.tsx, dialog.tsx, select.tsx)
-- [x] **T080** [P] Create base layout component with Opcode-style sidebar (src/components/layout/AppLayout.tsx)
-- [x] **T081** [P] Create navigation component (src/components/layout/SidebarNav.tsx)
-- [x] **T082** [P] Set up Zustand transaction store (src/stores/transactionStore.ts)
-- [x] **T083** [P] Set up Zustand debt store (src/stores/debtStore.ts)
-- [x] **T084** [P] Set up Zustand analytics store (src/stores/analyticsStore.ts)
-- [x] **T085** [P] Set up Zustand UI store (src/stores/uiStore.ts)
-- [x] **T086** [P] Create Tauri command hooks utilities (src/lib/tauri-commands.ts)
+### Column Mapping Services & Commands
+- [ ] T071 Create ColumnMappingService with upsert logic in src-tauri/src/services/column_mapping_service.rs
+- [ ] T072 Implement column_mapping commands (save, list, get, update, delete) in src-tauri/src/commands/column_mappings.rs
 
-## Phase 3.7: Frontend - Transaction Features
+### Transaction Services & Commands (Enhanced)
+- [x] T073 Create TransactionService with duplicate detection in src-tauri/src/services/transaction_service.rs
+- [x] T074 Create CsvImportService with streaming and progress in src-tauri/src/services/csv_import_service.rs
+- [x] T075 Create CategorizationService with rule priority in src-tauri/src/services/categorization_service.rs
+- [ ] T076 Implement search_transactions command with debounce in src-tauri/src/commands/transactions.rs
+- [ ] T077 Implement delete_transaction command in src-tauri/src/commands/transactions.rs
+- [ ] T078 Implement bulk transaction commands (bulk_delete, bulk_update_category) in src-tauri/src/commands/transactions.rs
 
-- [x] **T087** [P] Create CSV upload dialog component (src/components/CsvUploadDialog.tsx)
-  - Fixed import naming collision (open vs openDialog)
-  - Configured Tauri permissions for dialog and filesystem access
-- [x] **T088** [P] Create column mapping interface component (src/components/ColumnMappingForm.tsx)
-- [x] **T089** [P] Create transaction list table component (src/components/TransactionList.tsx)
-- [x] **T090** [P] Create transaction category editor (src/components/TransactionCategoryEditor.tsx)
-- [x] **T091** Create transactions page (src/pages/TransactionsPage.tsx)
-- [x] **T091a** [P] Create account creation dialog (src/components/AccountCreationDialog.tsx) - Added for MVP
-- [x] **T091b** [P] Create account store (src/stores/accountStore.ts) - Added for MVP
-- [x] **T091c** [P] Create category store (src/stores/categoryStore.ts) - Added for MVP
+### Debt Services & Commands (Enhanced)
+- [x] T079 Create DebtService with CRUD operations in src-tauri/src/services/debt_service.rs
+- [x] T080 Create DebtCalculationService for avalanche/snowball algorithms in src-tauri/src/services/debt_calculation_service.rs
+- [ ] T081 Implement delete_debt command with cascade in src-tauri/src/commands/debts.rs
 
-## Phase 3.8: Frontend - Debt Features
+### Analytics Services & Commands
+- [x] T082 Create AnalyticsService for spending calculations in src-tauri/src/services/analytics_service.rs
+- [x] T083 Create ExportService for CSV/JSON/PDF export in src-tauri/src/services/export_service.rs
 
-- [x] **T092** [P] Create debt form component (integrated in DebtPlannerPage)
-- [x] **T093** [P] Create debt list component (integrated in DebtPlannerPage)
-- [x] **T094** [P] Create payoff strategy selector component (integrated in DebtPlannerPage)
-- [x] **T095** [P] Create payment schedule table component (integrated in DebtPlannerPage)
-- [ ] **T096** [P] Create strategy comparison display (src/components/debts/strategy-comparison.tsx)
-- [x] **T097** Create debt payoff planner page (src/pages/DebtPlannerPage.tsx)
-- [ ] **T098** Create debt progress page (src/pages/debt-progress-page.tsx)
+### Security & Validation
+- [ ] T084 Implement input validation middleware with sanitization in src-tauri/src/middleware/validation.rs
+- [ ] T085 Implement rate limiter for CSV imports (2 sec throttle) in src-tauri/src/middleware/rate_limiter.rs
+- [ ] T086 Create custom error types with safe user messages in src-tauri/src/errors.rs
+- [ ] T087 Add SQL injection prevention tests for all queries in src-tauri/tests/security/sql_injection_test.rs
 
-## Phase 3.9: Frontend - Analytics & Visualization
+---
 
-- [x] **T099** [P] Create pie chart wrapper for Recharts (src/components/visualizations/SpendingPieChart.tsx)
-- [x] **T100** [P] Create bar chart wrapper for Recharts (src/components/visualizations/SpendingBarChart.tsx)
-- [x] **T101** [P] Create line chart wrapper for Recharts (src/components/visualizations/TrendsLineChart.tsx)
-- [x] **T102** [P] Create progress bar component (integrated in pages)
-- [x] **T103** [P] Create spending category card component (integrated in SpendingAnalysisPage)
-- [x] **T104** [P] Create spending target display component (integrated in DashboardPage)
-- [x] **T105** [P] Create date range selector component (integrated in SpendingAnalysisPage and TrendsPage)
-- [x] **T106** Create spending analysis page (src/pages/SpendingAnalysisPage.tsx)
-- [x] **T107** Create dashboard page (src/pages/DashboardPage.tsx)
+## Phase 3.5: Frontend - TypeScript Types & Stores
 
-## Phase 3.10: Integration Tests (E2E Scenarios)
+### Type Definitions
+- [x] T088 [P] Create TypeScript types for Account in src/types/account.ts
+- [x] T089 [P] Create TypeScript types for Transaction in src/types/transaction.ts
+- [x] T090 [P] Create TypeScript types for Category in src/types/category.ts
+- [ ] T091 [P] Create TypeScript types for CategoryRule in src/types/category_rule.ts
+- [ ] T092 [P] Create TypeScript types for ColumnMapping in src/types/column_mapping.ts
+- [x] T093 [P] Create TypeScript types for Debt and DebtPlan in src/types/debt.ts
+- [x] T094 [P] Create TypeScript types for Analytics responses in src/types/analytics.ts
 
-- [ ] **T108** [P] Integration test: Scenario 1 - CSV upload and categorization (tests/integration/scenario-1-csv-upload.test.ts)
-- [ ] **T109** [P] Integration test: Scenario 2 - Spending analysis with pie chart (tests/integration/scenario-2-spending-analysis.test.ts)
-- [ ] **T110** [P] Integration test: Scenario 3 - Avalanche debt payoff (tests/integration/scenario-3-avalanche.test.ts)
-- [ ] **T111** [P] Integration test: Scenario 4 - Snowball debt payoff (tests/integration/scenario-4-snowball.test.ts)
-- [ ] **T112** [P] Integration test: Scenario 5 - Spending targets progress (tests/integration/scenario-5-targets.test.ts)
-- [ ] **T113** [P] Integration test: Scenario 6 - Debt progress visualizations (tests/integration/scenario-6-debt-progress.test.ts)
-- [ ] **T114** [P] Integration test: Scenario 7 - Transaction update triggers recalculation (tests/integration/scenario-7-auto-update.test.ts)
+### Zustand Stores
+- [x] T095 [P] Create accountStore with CRUD actions in src/stores/accountStore.ts
+- [x] T096 [P] Create transactionStore with pagination state in src/stores/transactionStore.ts
+- [x] T097 [P] Create categoryStore with predefined/custom separation in src/stores/categoryStore.ts
+- [ ] T098 [P] Create categoryRuleStore in src/stores/categoryRuleStore.ts
+- [ ] T099 [P] Create columnMappingStore in src/stores/columnMappingStore.ts
+- [x] T100 [P] Create debtStore with plan state in src/stores/debtStore.ts
+- [x] T101 [P] Create analyticsStore with caching in src/stores/analyticsStore.ts
+- [x] T102 [P] Create uiStore for loading/error states in src/stores/uiStore.ts
 
-## Phase 3.11: Unit Tests for Services
+---
 
-- [ ] **T115** [P] Unit tests for CSV parser (src-tauri/tests/unit/test_csv_parser.rs)
-- [ ] **T116** [P] Unit tests for duplicate detector (src-tauri/tests/unit/test_duplicate_detector.rs)
-- [ ] **T117** [P] Unit tests for categorizer (src-tauri/tests/unit/test_categorizer.rs)
-- [ ] **T118** [P] Unit tests for avalanche calculator (src-tauri/tests/unit/test_avalanche.rs)
-- [ ] **T119** [P] Unit tests for snowball calculator (src-tauri/tests/unit/test_snowball.rs)
-- [ ] **T120** [P] Unit tests for interest calculator (src-tauri/tests/unit/test_interest.rs)
-- [ ] **T121** [P] Unit tests for spending aggregator (src-tauri/tests/unit/test_aggregator.rs)
-- [ ] **T122** [P] Unit tests for trends calculator (src-tauri/tests/unit/test_trends.rs)
+## Phase 3.6: Frontend - Base Components & UI Kit
 
-## Phase 3.12: Frontend Unit Tests
+### Radix UI Wrappers (following Opcode pattern)
+- [x] T103 [P] Create Button component with Radix in src/components/ui/Button.tsx
+- [x] T104 [P] Create Dialog component with Radix in src/components/ui/Dialog.tsx
+- [x] T105 [P] Create Select component with Radix in src/components/ui/Select.tsx
+- [x] T106 [P] Create Table component with Radix in src/components/ui/Table.tsx
+- [x] T107 [P] Create Tabs component with Radix in src/components/ui/Tabs.tsx
+- [ ] T108 [P] Create Toast component with Radix in src/components/ui/Toast.tsx
+- [x] T109 [P] Create ProgressBar component with Radix in src/components/ui/ProgressBar.tsx
+- [ ] T110 [P] Create Checkbox component with Radix in src/components/ui/Checkbox.tsx
 
-- [ ] **T123** [P] Unit tests for transaction store (tests/unit/use-transaction-store.test.ts)
-- [ ] **T124** [P] Unit tests for debt store (tests/unit/use-debt-store.test.ts)
-- [ ] **T125** [P] Unit tests for analytics store (tests/unit/use-analytics-store.test.ts)
-- [ ] **T126** [P] Unit tests for CSV upload dialog (tests/unit/csv-upload-dialog.test.tsx)
-- [ ] **T127** [P] Unit tests for payment schedule component (tests/unit/payment-schedule.test.tsx)
-- [ ] **T128** [P] Unit tests for pie chart component (tests/unit/spending-pie-chart.test.tsx)
-- [ ] **T129** [P] Unit tests for target display component (tests/unit/target-display.test.tsx)
+### Layout & Navigation
+- [x] T111 Create AppLayout with sidebar navigation in src/components/layout/AppLayout.tsx
+- [x] T112 Create Sidebar with route navigation in src/components/layout/Sidebar.tsx
+- [ ] T113 Create Header with breadcrumbs in src/components/layout/Header.tsx
 
-## Phase 3.13: Polish & Performance
+### Reusable Components
+- [ ] T114 [P] Create ConfirmationDialog with count display in src/components/common/ConfirmationDialog.tsx
+- [x] T115 [P] Create LoadingSpinner component in src/components/common/LoadingSpinner.tsx
+- [x] T116 [P] Create EmptyState component in src/components/common/EmptyState.tsx
+- [ ] T117 [P] Create ErrorBoundary component in src/components/common/ErrorBoundary.tsx
+- [ ] T118 [P] Create Pagination component in src/components/common/Pagination.tsx
 
-- [ ] **T130** [P] Implement error boundaries for React components (src/components/error-boundary.tsx)
-- [ ] **T131** [P] Add loading states to all async operations (src/components/ui/loading-spinner.tsx)
-- [ ] **T132** [P] Optimize database queries with prepared statements (src-tauri/src/db/optimizations.rs)
-- [ ] **T133** [P] Implement virtualization for large transaction lists (src/components/transactions/virtualized-list.tsx)
-- [ ] **T134** [P] Add performance monitoring for CSV import (src-tauri/src/services/performance_monitor.rs)
-- [ ] **T135** [P] Create settings page with preferences (src/pages/settings-page.tsx)
-- [ ] **T136** [P] Implement data export functionality (CSV/JSON) (src/components/settings/export-data.tsx)
-- [ ] **T137** [P] Implement data deletion with confirmation (src/components/settings/delete-data.tsx)
-- [ ] **T138** Verify all performance targets (<100ms UI, <500ms CSV import, 60fps charts)
-- [ ] **T139** Run manual testing using quickstart.md scenarios
+---
+
+## Phase 3.7: Frontend - Enhanced Feature Components
+
+### Account Management UI (NEW - FR-001 to FR-004)
+- [ ] T119 Create AccountList component with account cards in src/components/accounts/AccountList.tsx
+- [x] T120 Create AccountFormDialog for create/edit in src/components/accounts/AccountFormDialog.tsx
+- [ ] T121 Create AccountDeleteDialog with cascade warning in src/components/accounts/AccountDeleteDialog.tsx
+- [ ] T122 Create AccountsPage with account management in src/pages/AccountsPage.tsx
+
+### Transaction Management UI (ENHANCED - FR-014 to FR-021)
+- [x] T123 Create TransactionList with pagination (25/page) in src/components/transactions/TransactionList.tsx
+- [ ] T124 Create TransactionRow with checkbox for bulk select in src/components/transactions/TransactionRow.tsx
+- [ ] T125 Create TransactionSearchBar with 500ms debounce in src/components/transactions/TransactionSearchBar.tsx
+- [ ] T126 Create TransactionFilters (date, category, account) in src/components/transactions/TransactionFilters.tsx
+- [ ] T127 Create BulkActionToolbar with delete/update actions in src/components/transactions/BulkActionToolbar.tsx
+- [ ] T128 Create TransactionDeleteDialog with count in src/components/transactions/TransactionDeleteDialog.tsx
+- [x] T129 Create CategorySelectDialog for manual categorization in src/components/transactions/CategorySelectDialog.tsx
+- [x] T130 Create TransactionsPage with all transaction features in src/pages/TransactionsPage.tsx
+
+### CSV Import UI (ENHANCED - FR-007 to FR-009)
+- [x] T131 Create CsvImportDialog with file picker in src/components/import/CsvImportDialog.tsx
+- [x] T132 Create ColumnMappingForm with preview in src/components/import/ColumnMappingForm.tsx
+- [ ] T133 Create ColumnMappingSelector for saved mappings in src/components/import/ColumnMappingSelector.tsx
+- [ ] T134 Create ImportProgress with row count in src/components/import/ImportProgress.tsx
+- [ ] T135 Create ColumnMappingManagement page in src/pages/ColumnMappingManagement.tsx
+
+### Category Management UI (NEW - FR-022 to FR-025)
+- [ ] T136 Create CategoryList with predefined/custom sections in src/components/categories/CategoryList.tsx
+- [ ] T137 Create CategoryFormDialog for custom categories in src/components/categories/CategoryFormDialog.tsx
+- [ ] T138 Create CategoryDeleteDialog with reassignment warning in src/components/categories/CategoryDeleteDialog.tsx
+- [ ] T139 Create CategoryRuleList ordered by priority in src/components/categories/CategoryRuleList.tsx
+- [ ] T140 Create CategoryRuleFormDialog for pattern editing in src/components/categories/CategoryRuleFormDialog.tsx
+- [ ] T141 Create CategoriesPage with category & rule management in src/pages/CategoriesPage.tsx
+
+### Debt Management UI (ENHANCED - FR-032 to FR-040)
+- [x] T142 Create DebtList with debt cards showing balance/rate in src/components/debts/DebtList.tsx
+- [x] T143 Create DebtFormDialog for create/edit in src/components/debts/DebtFormDialog.tsx
+- [ ] T144 Create DebtDeleteDialog with cascade warning in src/components/debts/DebtDeleteDialog.tsx
+- [x] T145 Create PayoffPlannerForm with strategy selector in src/components/debts/PayoffPlannerForm.tsx
+- [x] T146 Create PayoffScheduleTable with monthly breakdown in src/components/debts/PayoffScheduleTable.tsx
+- [ ] T147 Create StrategyComparison showing avalanche vs snowball in src/components/debts/StrategyComparison.tsx
+- [ ] T148 Create DebtPaymentForm for recording payments in src/components/debts/DebtPaymentForm.tsx
+- [ ] T149 Create DebtProgressCard with payment history in src/components/debts/DebtProgressCard.tsx
+- [x] T150 Create DebtsPage with debt management in src/pages/DebtsPage.tsx
+- [x] T151 Create PayoffPlannerPage with plan creation in src/pages/PayoffPlannerPage.tsx
+
+### Analytics & Visualization UI (FR-041 to FR-048)
+- [x] T152 [P] Create PieChart component using Recharts in src/components/visualizations/PieChart.tsx
+- [x] T153 [P] Create BarChart component using Recharts in src/components/visualizations/BarChart.tsx
+- [x] T154 [P] Create LineChart component using Recharts in src/components/visualizations/LineChart.tsx
+- [x] T155 [P] Create ProgressBarChart component in src/components/visualizations/ProgressBarChart.tsx
+- [x] T156 Create SpendingByCategoryCard with pie chart in src/components/analytics/SpendingByCategoryCard.tsx
+- [x] T157 Create SpendingTrendsCard with line chart in src/components/analytics/SpendingTrendsCard.tsx
+- [ ] T158 Create SpendingTargetsList with progress bars in src/components/analytics/SpendingTargetsList.tsx
+- [ ] T159 Create SpendingTargetFormDialog for create/edit in src/components/analytics/SpendingTargetFormDialog.tsx
+- [x] T160 Create DateRangeSelector with presets in src/components/analytics/DateRangeSelector.tsx
+- [x] T161 Create DashboardSummaryCard with key metrics in src/components/analytics/DashboardSummaryCard.tsx
+- [x] T162 Create DashboardPage with overview widgets in src/pages/DashboardPage.tsx
+- [x] T163 Create AnalyticsPage with detailed charts in src/pages/AnalyticsPage.tsx
+
+---
+
+## Phase 3.8: Integration Tests (E2E Scenarios from quickstart.md)
+
+- [ ] T164 [P] Integration test: Scenario 1 - CSV upload and categorization in tests/integration/csv_import.test.ts
+- [ ] T165 [P] Integration test: Scenario 2 - Spending analysis with pie charts in tests/integration/spending_analysis.test.ts
+- [ ] T166 [P] Integration test: Scenario 3 - Avalanche debt payoff plan in tests/integration/avalanche_payoff.test.ts
+- [ ] T167 [P] Integration test: Scenario 4 - Snowball debt payoff plan in tests/integration/snowball_payoff.test.ts
+- [ ] T168 [P] Integration test: Scenario 5 - Spending targets progress in tests/integration/spending_targets.test.ts
+- [ ] T169 [P] Integration test: Scenario 6 - Debt progress visualizations in tests/integration/debt_progress.test.ts
+- [ ] T170 [P] Integration test: Scenario 7 - Transaction update triggers recalculation in tests/integration/auto_update.test.ts
+
+---
+
+## Phase 3.9: Polish & Optimization
+
+### User Experience (FR-050 confirmation dialogs)
+- [ ] T171 Implement confirmation dialogs for all delete operations with count display
+- [ ] T172 Add loading states to all async operations in all pages
+- [ ] T173 Add toast notifications for success/error feedback using Toast component
+- [ ] T174 Add empty states for lists with no data using EmptyState component
+- [ ] T175 Add error boundaries around major sections using ErrorBoundary component
+- [ ] T176 Implement optimistic UI updates in transaction operations
+
+### Performance (FR-014/FR-015 pagination, FR-017 search debounce)
+- [ ] T177 Add virtualization to TransactionList for >100 items using react-window
+- [ ] T178 Implement debounced search in TransactionSearchBar (500ms per spec FR-017)
+- [ ] T179 Add caching to analyticsStore for expensive calculations
+- [ ] T180 Optimize chart rendering with React.memo on visualization components
+- [ ] T181 Add indexes to SQLite queries per data-model.md
+
+### Accessibility (WCAG AA compliance per spec FR-044) ⚠️ CRITICAL GAPS FOUND
+**See ACCESSIBILITY_AUDIT.md for detailed findings (Score: 5.5/10)**
+
+#### Priority 1 (Blocking - Must Fix for WCAG AA)
+- [ ] T182 **[CRITICAL]** Add htmlFor and id to ALL form inputs
+  - AccountCreationDialog.tsx (3 inputs)
+  - ColumnMappingForm.tsx (4 inputs)
+  - DebtPlannerPage.tsx (all debt form inputs)
+  - Add aria-required="true" to required fields
+- [ ] T183 **[CRITICAL]** Add text/icon indicators for color-coded information (per FR-044)
+  - DashboardPage.tsx: Add ↑/↓ icons for income/expense
+  - Error/success messages: Add icons, not just red/green backgrounds
+- [ ] T184 **[CRITICAL]** Add alternative text/data tables for all charts
+  - SpendingPieChart.tsx: Add sr-only data table
+  - SpendingBarChart.tsx: Add sr-only data table
+  - TrendsLineChart.tsx: Add sr-only data table
+  - Add role="img" and aria-label to chart containers
+- [ ] T185 **[CRITICAL]** Add required field indicators with asterisk and aria-required
+  - Visual indicator: <span className="text-red-600">*</span>
+  - Programmatic: aria-required="true"
+- [ ] T186 **[CRITICAL]** Add skip to main content link in AppLayout.tsx
+
+#### Priority 2 (High - Should Fix)
+- [ ] T187 Add aria-label to all icon-only buttons
+  - Edit buttons, delete buttons, action icons
+- [ ] T188 Add role="alert" and aria-live to error messages
+  - All error message containers
+- [ ] T189 Associate error messages with inputs using aria-describedby
+  - Add id to error spans
+  - Reference in input aria-describedby
+- [ ] T190 Add scope="col" attributes to table headers in Table.tsx
+
+#### Priority 3 (Testing & Validation)
+- [ ] T191 Test full keyboard navigation (no mouse) across all pages
+- [ ] T192 Test with screen reader (NVDA/JAWS/VoiceOver)
+- [ ] T193 Run automated a11y audit with axe-core browser extension
+- [ ] T194 Add live regions for dynamic content updates
+- [ ] T195 Install and configure @axe-core/react for automated testing
+
+### Testing & Quality
+- [ ] T196 [P] Unit tests for accountStore in tests/unit/stores/accountStore.test.ts
+- [ ] T197 [P] Unit tests for transactionStore in tests/unit/stores/transactionStore.test.ts
+- [ ] T198 [P] Unit tests for debtStore in tests/unit/stores/debtStore.test.ts
+- [ ] T199 [P] Unit tests for analyticsStore in tests/unit/stores/analyticsStore.test.ts
+- [ ] T200 [P] Component tests for AccountList in tests/unit/components/AccountList.test.tsx
+- [ ] T201 [P] Component tests for TransactionList in tests/unit/components/TransactionList.test.tsx
+- [ ] T202 [P] Component tests for DebtList in tests/unit/components/DebtList.test.tsx
+- [ ] T203 [P] Component tests for PieChart in tests/unit/components/PieChart.test.tsx
+- [ ] T204 Run backend coverage report (target: >60%) with cargo llvm-cov
+- [ ] T205 Run frontend coverage report (target: >70%) with vitest --coverage
+- [ ] T206 Fix any remaining ESLint warnings (beyond T011d)
+- [ ] T207 Fix any remaining Clippy warnings (beyond T011e)
+
+### Documentation
+- [ ] T208 [P] Update CLAUDE.md with final project structure
+- [ ] T209 [P] Create user guide in docs/USER_GUIDE.md
+- [ ] T210 [P] Document CSV import format in docs/CSV_FORMAT.md
+- [ ] T211 [P] Add inline code comments for complex algorithms (debt calculation, categorization)
+
+---
 
 ## Dependencies
 
 ### Critical Path
-```
-T001-T010 (Setup) → T011-T022 (Models) → T023-T044 (Contract Tests) →
-T045-T078 (Backend Implementation) → T079-T107 (Frontend) →
-T108-T114 (Integration Tests) → T115-T129 (Unit Tests) → T130-T139 (Polish)
-```
+1. **Setup** (T001-T011) → All other phases
+2. **Backend Tests** (T020-T064) → Backend Implementation (T065-T087)
+3. **Models** (T012-T019) → Services (T065-T083) → Commands (T066-T083)
+4. **Types** (T088-T094) → Stores (T095-T102)
+5. **Base Components** (T103-T118) → Feature Components (T119-T163)
+6. **All Implementation** → Integration Tests (T164-T170)
+7. **All Implementation** → Polish (T171-T202)
 
 ### Parallel Execution Groups
 
-**Group 1: Setup (can run in parallel)**
+**Group 1 - Setup (can run together)**:
 ```
-T001, T002, T003, T004, T005, T006, T008
-```
-
-**Group 2: Models (after T007-T010)**
-```
-T011, T012, T013, T014, T015, T016, T017, T018, T019, T020, T021, T022
+T004 (ESLint/Prettier), T005 (Clippy/rustfmt), T010 (Vitest config), T011a (CI/CD setup)
 ```
 
-**Group 3: Contract Tests (after models)**
+**Group 2 - Data Models (all independent)**:
 ```
-T023-T044 (all 22 contract tests can run in parallel)
-```
-
-**Group 4: Services (after contract tests fail)**
-```
-T045, T046, T047 (CSV services)
-T049, T050, T051, T052 (Debt calculation services - can run in parallel)
-T053, T054, T055 (Analytics services - can run in parallel)
+T012-T019 (all model files in parallel)
 ```
 
-**Group 5: Frontend Components (after T078-T086)**
+**Group 3 - Backend Contract Tests (all independent)**:
 ```
-T087, T088, T089, T090 (Transaction components)
-T092, T093, T094, T095, T096 (Debt components)
-T099, T100, T101, T102, T103, T104, T105 (Visualization components)
+T020-T064 (all contract tests in parallel - 45 tests across different files)
 ```
 
-**Group 6: Integration Tests (after frontend complete)**
+**Group 4 - Frontend Types (all independent)**:
 ```
-T108-T114 (all 7 scenarios can run in parallel)
-```
-
-**Group 7: Unit Tests (after implementation)**
-```
-T115-T129 (all unit tests can run in parallel)
+T088-T094 (all type files in parallel)
 ```
 
-**Group 8: Polish (after tests pass)**
+**Group 5 - Zustand Stores (all independent)**:
 ```
-T130, T131, T132, T133, T134, T135, T136, T137 (can run in parallel)
-```
-
-## Notes
-
-- **TDD Workflow**: All contract tests (T023-T044) must be written and failing before implementing commands (T056-T078)
-  - **Violation Acknowledged**: Tests were written retroactively for T023, T025, T026, T028 after implementation
-  - **Going Forward**: MUST write tests first for all remaining features (no exceptions)
-- **Database First**: Complete schema (T007-T010) before models (T011-T022)
-- **Backend Before Frontend**: All Tauri commands (T078) must be complete before frontend pages
-- **Test Coverage**: Every command has a contract test, every scenario has an integration test
-- **Performance**: T138 validates all performance goals before completion
-- **Constitution Compliance**: Follows TDD (tests first), maintainability (TypeScript, clear structure), substance over flash (functional UI)
-
-## Additional Work Completed (Not in Original Tasks)
-
-### Testing Infrastructure
-- Created comprehensive integration test suite (src-tauri/tests/integration/)
-- Added test helpers for unique naming to avoid database conflicts
-- Created TESTING.md documentation
-- Configured frontend test infrastructure (vitest + jsdom, pending full integration)
-- Added @testing-library/react and @testing-library/jest-dom
-
-### Permissions & Configuration
-- Configured Tauri permissions in capabilities/default.json
-  - dialog:allow-open, dialog:default
-  - fs:allow-read-text-file, fs:default
-- Fixed database initialization to use sqlx::migrate!() macro
-- Database path uses proper app data directory (dirs::data_dir())
-
-### Bug Fixes
-- Fixed CSV upload dialog import naming collision
-- Fixed database connection to create missing files
-- Fixed database migration to handle multi-statement SQL
-- Fixed test isolation with unique timestamps for account/category names
-
-### Documentation
-- Created TESTING.md with test running instructions and known issues
-- Updated plan.md with database migration strategy documentation
-
-## Execution Command Examples
-
-### Run all contract tests in parallel
-```bash
-cd src-tauri && cargo test --test integration -- --test-threads=22
+T095-T102 (all store files in parallel)
 ```
 
-### Run frontend unit tests
-```bash
-bun run test:unit
+**Group 6 - UI Components (all independent)**:
+```
+T103-T110 (Radix wrappers in parallel)
+T114-T118 (reusable components in parallel)
 ```
 
-### Run integration scenarios
-```bash
-bun run test:integration
+**Group 7 - Visualization Components (all independent)**:
+```
+T152-T155 (chart components in parallel)
 ```
 
-### Build for production
-```bash
-bun run tauri build
+**Group 8 - Integration Tests (all independent)**:
+```
+T164-T170 (all scenario tests in parallel)
+```
+
+**Group 9 - Unit Tests (all independent)**:
+```
+T187-T194 (all unit tests in parallel)
+```
+
+**Group 10 - Documentation (all independent)**:
+```
+T199-T202 (all docs in parallel)
 ```
 
 ---
 
-## 📊 Implementation Status Summary
+## Validation Checklist
 
-### ✅ COMPLETED PHASES (Phases 3.1 - 3.9)
+- [x] All contracts (44 commands total) have corresponding tests (T020-T064)
+  - 4 Account commands (T020-T023)
+  - 11 Transaction commands (T024-T034)
+  - 4 Category commands (T035-T038)
+  - 4 Category Rule commands (T039-T042)
+  - 5 Column Mapping commands (T043-T047)
+  - 9 Debt commands (T048-T057 includes delete_debt)
+  - 7 Analytics commands (T058-T064)
+- [x] All entities (8 tables) have model tasks (T012-T019)
+- [x] All tests come before implementation (Phase 3.3 before 3.4)
+- [x] Parallel tasks truly independent (different files, no shared state)
+- [x] Each task specifies exact file path
+- [x] No task modifies same file as another [P] task
+- [x] All 7 integration scenarios from quickstart.md covered (T164-T170)
+- [x] Security requirements addressed (T084-T087: validation, rate limiting, error handling, SQL injection)
+- [x] Performance requirements addressed (T177-T181: virtualization, debounce, caching, indexes)
+- [x] Accessibility requirements addressed (WCAG AA per FR-044: T182-T186)
+- [x] Testing coverage targets specified (>60% backend, >70% frontend: T195-T196)
+- [x] Confirmation dialogs for all destructive operations (per FR-050: T171)
+- [x] Pagination (25/page per FR-014: T123-T127)
+- [x] Search debounce (500ms per FR-017: T125, T178)
 
-**Backend Implementation (100% Complete):**
-- ✅ All database models and repositories
-- ✅ All services (CSV, transactions, debts, analytics)
-- ✅ All Tauri commands (26 commands registered)
-- ✅ Analytics: spending aggregation, trends, targets
-- ✅ Debt: avalanche/snowball calculators, payment scheduling
-- ✅ Contract tests: 56/68 passing (82%)
+---
 
-**Frontend Implementation (100% Complete):**
-- ✅ Base layout with Opcode-style sidebar
-- ✅ All Zustand stores (6 stores)
-- ✅ Transaction features (CSV upload, categorization, list, export)
-- ✅ Debt planner page with strategy calculator
-- ✅ Dashboard with financial summary
-- ✅ Spending analysis with visualizations
-- ✅ Professional charts (Pie, Bar, Line) with Recharts
-- ✅ Dark mode support
-- ✅ Responsive design
+## New Features Coverage (from 2025-10-05 spec updates)
 
-**Application Status: FULLY FUNCTIONAL MVP** 🎉
+### Account Management (FR-001 to FR-004)
+- **Backend**: T020-T023, T065-T066
+- **Frontend**: T119-T122
+- **Features**: CRUD operations, cascade delete, balance tracking
 
-### 📝 OPTIONAL/REMAINING (Phases 3.10 - 3.13)
+### Enhanced Transaction Management (FR-014 to FR-021)
+- **Backend**: T026, T028-T030, T076-T078
+- **Frontend**: T124-T128
+- **Features**: Pagination, search, delete, bulk operations
 
-**Testing (Optional):**
-- Integration tests (T108-T114) - E2E scenarios
-- Unit tests (T115-T129) - Backend and frontend
+### Category Management (FR-022 to FR-025)
+- **Backend**: T035-T042, T067-T070
+- **Frontend**: T136-T141
+- **Features**: Custom categories, predefined protection, reassignment on delete
 
-**Polish (Optional):**
-- Error boundaries (T130)
-- Loading states improvements (T131)
-- Database optimizations (T132)
-- Virtualization for large lists (T133)
-- Performance monitoring (T134)
-- Settings page (T135)
-- Additional export features (T136-T137)
+### Column Mapping Management (FR-007 to FR-009)
+- **Backend**: T043-T047, T071-T072
+- **Frontend**: T133-T135
+- **Features**: Save/load mappings, upsert behavior, mapping management
 
-### 🚀 Ready to Use
+### Enhanced Debt Management (FR-032 to FR-040)
+- **Backend**: T051, T081
+- **Frontend**: T144, T147-T149
+- **Features**: Delete with cascade, payment recording, progress tracking
 
-**Total Tasks**: 139
-**Completed**: 107/139 (77%)
-**Core Functionality**: 100% Complete
-**Status**: Production-ready MVP
+### Confirmation Dialogs (FR-050)
+- **Frontend**: T114, T121, T128, T144, T171
+- **Features**: Count display, explicit confirmation for all destructive operations
 
-**Run the app**: `bun run tauri dev`
+---
+
+## Implementation Status
+
+### ✅ COMPLETED (from previous work)
+- Setup & Database (T001-T011): 100%
+- Data Models (T012-T019): 100%
+- Core Tauri Commands: 26 commands implemented
+- Basic Frontend: Dashboard, Transactions, Debts, Analytics
+- Backend Test Infrastructure: 56/68 passing tests (82%)
+
+### 🔨 IN PROGRESS / TODO
+- **Account Management**: T022-T023 (tests), T065-T066 (backend), T119-T122 (frontend)
+- **Enhanced Transactions**: T026, T028-T030 (tests), T076-T078 (backend), T124-T128 (frontend)
+- **Category Management**: T035-T042 (tests), T067-T070 (backend), T136-T141 (frontend)
+- **Category Rules**: T039-T042 (tests), T069-T070 (backend), T139-T140 (frontend)
+- **Column Mappings**: T043-T047 (tests), T071-T072 (backend), T133-T135 (frontend)
+- **Enhanced Debt**: T051 (test), T081 (backend), T144, T147-T149 (frontend)
+- **Confirmation Dialogs**: T114, T121, T128, T144 (frontend)
+- **Security**: T084-T087 (validation, rate limiting, error handling)
+- **Polish**: T171-T202 (UX, performance, accessibility, testing, docs)
+
+---
+
+## Notes
+
+- **Total Tasks**: 225 tasks (up from 139)
+- **Added Tasks**: 86 new tasks (63 features + 1 CI/CD + 7 code quality + 14 accessibility + 1 testing)
+- **Estimated Duration**: 5-7 additional weeks for full implementation of new features + a11y compliance
+
+### Immediate Priorities (FIX BEFORE RELEASE)
+- **Code Quality**:
+  - T011a (CI/CD) - Set up immediately for continuous integration
+  - T011b (CRITICAL) - Fix production unwrap() that can cause panics
+  - T011c (CRITICAL) - Fix TypeScript any types that break type safety
+  - T011d-e (HIGH) - Fix linting warnings before merging PRs
+- **Accessibility (BLOCKING for WCAG AA)**:
+  - T182 (CRITICAL) - Add form label associations (htmlFor + id)
+  - T183 (CRITICAL) - Fix color-only information (add icons)
+  - T184 (CRITICAL) - Add chart alternatives for screen readers
+  - T185 (CRITICAL) - Add required field indicators
+  - T186 (CRITICAL) - Add skip to main content link
+
+### Project Standards
+- **TDD Required**: All contract tests (T020-T064) must fail before implementation begins
+- **Parallel Execution**: 95+ tasks marked [P] can run concurrently
+- **Critical Security**: Tasks T084-T087 address SQL injection, rate limiting, and input validation
+- **Test Coverage**: Backend 60%+ (T204), Frontend 70%+ (T205) per plan.md requirements
+- **Constitution Compliance**: TDD enforced, substance over flash, ease of development prioritized
+- **Accessibility**: WCAG AA compliance REQUIRED per FR-044 - See ACCESSIBILITY_AUDIT.md (Score: 5.5/10 - Needs Work)
+- **Confirmation UX**: All destructive operations require confirmation with count (FR-050)
+- **Code Quality**: See CODE_QUALITY_AUDIT.md for detailed analysis (Score: 7.6/10 - Good)
+- **Best Practices**: Following GitHub Copilot Rust, TypeScript/React, and a11y guidelines

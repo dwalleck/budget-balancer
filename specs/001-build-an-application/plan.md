@@ -42,7 +42,7 @@ Budget Balancer is a single-user desktop application for tracking spending and m
 **Testing**: Vitest for unit/integration tests, Tauri test utilities for E2E, cargo-llvm-cov for coverage
 **Target Platform**: Desktop (Windows, macOS, Linux via Tauri 2)
 **Project Type**: Desktop application (Tauri + React SPA)
-**Performance Goals**: <100ms UI response time, <500ms for CSV import/processing, smooth 60fps visualizations
+**Performance Goals**: <100ms UI response time, <500ms for CSV import/processing (files with 100-1000 rows), smooth 60fps visualizations
 **Constraints**: Offline-capable, single-user local storage, OS-level security only
 **Scale/Scope**: Personal finance management, ~10k transactions/year expected, <50MB data storage typical
 
@@ -61,7 +61,7 @@ Budget Balancer is a single-user desktop application for tracking spending and m
 
 ### Performance
 - **Database**: Connection pooling with maximum 5 concurrent connections
-- **Transaction Queries**: Paginated with default 50 items per page, max 100
+- **Transaction Queries**: Paginated with 25 items per page (per spec FR-014)
 - **CSV Import**: Stream processing for files >100 rows, progress reporting for >1000 rows
 - **Async Operations**: All long-running tasks (imports, calculations) run asynchronously
 - **Query Optimization**: Indexes on frequently queried columns (date, category_id, account_id)
@@ -107,9 +107,13 @@ specs/001-build-an-application/
 ├── data-model.md        # Phase 1 output (/plan command)
 ├── quickstart.md        # Phase 1 output (/plan command)
 ├── contracts/           # Phase 1 output (/plan command)
-│   ├── transactions.md  # Transaction management contracts
-│   ├── debts.md         # Debt management contracts
-│   └── analytics.md     # Spending analysis contracts
+│   ├── accounts.md      # Account management contracts (4 commands)
+│   ├── transactions.md  # Transaction management contracts (11 commands)
+│   ├── categories.md    # Category management contracts (4 commands)
+│   ├── category_rules.md # Categorization rules contracts (4 commands)
+│   ├── column_mappings.md # CSV mapping contracts (5 commands)
+│   ├── debts.md         # Debt management contracts (9 commands)
+│   └── analytics.md     # Spending analysis contracts (7 commands)
 └── tasks.md             # Phase 2 output (/tasks command - NOT created by /plan)
 ```
 
@@ -173,9 +177,13 @@ Research will be consolidated in `research.md` with decisions, rationale, and al
    - Validation rules and constraints
 
 2. **Tauri Command Contracts** (`contracts/`):
-   - Transaction commands (import, categorize, list, update)
-   - Debt commands (create, update, calculate payoff)
-   - Analytics commands (spending by category, trends, progress)
+   - Account commands (create, list, update, delete)
+   - Transaction commands (import, list, search, categorize, update, delete, bulk operations)
+   - Category commands (create, list, update, delete)
+   - Category rules commands (create, list, update, delete)
+   - Column mapping commands (save, list, get, update, delete)
+   - Debt commands (create, list, update, delete, calculate payoff)
+   - Analytics commands (spending by category, trends, progress, targets)
    - File operations (CSV import, data export)
 
 3. **Integration Test Scenarios** (`quickstart.md`):
@@ -196,11 +204,15 @@ Research will be consolidated in `research.md` with decisions, rationale, and al
 
 ### Task Generation Strategy
 
-**From Contracts** (15-20 tasks):
+**From Contracts** (25-30 tasks):
 - Setup: Project initialization, dependencies, Tauri configuration
 - Database: SQLite schema creation, migration system (using sqlx::migrate!() macro at app startup)
-- Transaction commands: import_csv, parse_csv, detect_duplicates, categorize_transaction, list_transactions
-- Debt commands: create_debt, calculate_avalanche, calculate_snowball, update_debt_balance
+- **Account commands** (NEW): create_account, list_accounts, update_account, delete_account
+- Transaction commands: import_csv, list_transactions, update_transaction_category, search_transactions, delete_transaction, bulk_delete_transactions, bulk_update_category
+- **Category commands** (NEW): create_category, list_categories, update_category, delete_category
+- **Category rules commands** (NEW): create_category_rule, list_category_rules, update_category_rule, delete_category_rule
+- **Column mapping commands** (NEW): save_column_mapping, list_column_mappings, get_column_mapping, update_column_mapping, delete_column_mapping
+- Debt commands: create_debt, list_debts, update_debt, delete_debt, calculate_avalanche, calculate_snowball
 - Analytics commands: spending_by_category, spending_trends, debt_progress
 - Each command gets: contract test [P] → implementation → unit tests [P]
 
@@ -218,12 +230,18 @@ Research will be consolidated in `research.md` with decisions, rationale, and al
 - Acceptance scenario 6: Debt progress visualizations
 - Acceptance scenario 7: Transaction update triggers recalculation
 
-**UI Implementation** (12-15 tasks):
+**UI Implementation** (18-22 tasks):
 - Base components: layout, navigation, theme
-- Transaction views: import, list, categorize
-- Debt views: add/edit, payoff planner
+- **Account management UI** (NEW): account list, create/edit dialog, delete confirmation
+- Transaction views: import, list with pagination, search bar, categorize, delete confirmation
+- **Bulk operations UI** (NEW): checkbox selection, bulk action toolbar, bulk delete/update confirmation
+- **Category management UI** (NEW): category list, create/edit dialog, delete with reassignment
+- **Category rules UI** (NEW): rules management page, pattern editor, priority configuration
+- **Column mappings UI** (NEW): mapping list, create/edit dialog, mapping selection in CSV import
+- Debt views: add/edit, delete confirmation, payoff planner
 - Analytics views: spending dashboard, progress tracking
 - Visualizations: pie chart, bar chart, line chart, progress bar components
+- **Confirmation dialogs** (NEW): generic confirmation component with count display
 
 **Ordering Strategy**:
 1. Setup & Database foundation
@@ -232,7 +250,17 @@ Research will be consolidated in `research.md` with decisions, rationale, and al
 4. Integration: E2E test scenarios
 5. Polish: Error handling, loading states, performance optimization
 
-**Estimated Output**: 50-60 numbered, ordered tasks in tasks.md with [P] markers for parallel execution
+**Estimated Output**: 85-100 numbered, ordered tasks in tasks.md with [P] markers for parallel execution
+
+**Added Scope** (from 2025-10-05 spec updates):
+- Account CRUD operations (4 commands + UI)
+- Category management (4 commands + UI)
+- Category rules management (4 commands + UI)
+- Column mappings management (4 commands + UI)
+- Transaction enhancements (search, delete, bulk operations - 4 commands + UI)
+- Debt delete operation (1 command + UI)
+- Confirmation dialog system
+- Pagination implementation (25/page)
 
 **IMPORTANT**: This phase is executed by the /tasks command, NOT by /plan
 
@@ -268,8 +296,12 @@ No violations - section not applicable.
 **Artifacts Generated**:
 - [x] research.md - Architectural decisions and technology choices
 - [x] data-model.md - SQLite schema with 8 tables and indexes
-- [x] contracts/transactions.md - 7 Tauri commands for transaction management
-- [x] contracts/debts.md - 8 Tauri commands for debt operations
+- [x] contracts/accounts.md - 4 Tauri commands for account management (2025-10-05)
+- [x] contracts/transactions.md - 11 Tauri commands for transaction management (updated 2025-10-05)
+- [x] contracts/categories.md - 4 Tauri commands for category management (2025-10-05)
+- [x] contracts/category_rules.md - 4 Tauri commands for categorization rules (2025-10-05)
+- [x] contracts/column_mappings.md - 5 Tauri commands for CSV mapping management (2025-10-05)
+- [x] contracts/debts.md - 9 Tauri commands for debt operations (updated 2025-10-05)
 - [x] contracts/analytics.md - 7 Tauri commands for spending analysis
 - [x] quickstart.md - 7 integration test scenarios mapped from acceptance criteria
 - [x] CLAUDE.md - Agent context file with tech stack and structure
