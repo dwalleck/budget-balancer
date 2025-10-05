@@ -397,6 +397,46 @@ async fn test_record_debt_payment_exceeds_balance() {
     );
 }
 
+#[tokio::test]
+async fn test_record_debt_payment_invalid_amount() {
+    let db = super::get_test_db_pool().await;
+    let debt = NewDebt {
+        name: unique_name("Invalid Payment Test"),
+        balance: 1000.0,
+        interest_rate: 15.0,
+        min_payment: 50.0,
+    };
+    let debt_id = create_debt_impl(db, debt).await.unwrap();
+
+    // Test zero payment
+    let result = record_debt_payment_impl(db, debt_id, 0.0, "2025-10-15".to_string(), None).await;
+    assert!(
+        result.is_err(),
+        "Should reject zero payment amount"
+    );
+    let error = result.unwrap_err();
+    let error_msg = error.to_string().to_lowercase();
+    assert!(
+        error_msg.contains("payment") && error_msg.contains("positive"),
+        "Error should mention payment must be positive: {}",
+        error_msg
+    );
+
+    // Test negative payment
+    let result = record_debt_payment_impl(db, debt_id, -100.0, "2025-10-15".to_string(), None).await;
+    assert!(
+        result.is_err(),
+        "Should reject negative payment amount"
+    );
+    let error = result.unwrap_err();
+    let error_msg = error.to_string().to_lowercase();
+    assert!(
+        error_msg.contains("payment") && error_msg.contains("positive"),
+        "Error should mention payment must be positive: {}",
+        error_msg
+    );
+}
+
 // T036: Contract test for get_debt_progress command
 #[tokio::test]
 async fn test_get_debt_progress() {

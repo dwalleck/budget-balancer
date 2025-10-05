@@ -195,7 +195,7 @@ pub async fn categorize_transaction_impl(
         &transaction.description,
     )
     .await
-    .map_err(|_| TransactionError::CategorizationFailed)?
+    .map_err(|_| TransactionError::CategorizationError)?
     .unwrap_or(DEFAULT_CATEGORY_ID); // Default to "Uncategorized"
 
     // Update the transaction with new category

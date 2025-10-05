@@ -70,6 +70,9 @@ pub enum DebtError {
     #[error("Debt plan not found with ID {0}")]
     PlanNotFound(i64),
 
+    #[error("Payment amount must be positive, got {0}")]
+    InvalidPaymentAmount(f64),
+
     #[error("Database error: {0}")]
     Database(String),
 }
@@ -89,6 +92,7 @@ impl DebtError {
             DebtError::InvalidStrategy(_) => self.to_string(),
             DebtError::PaymentExceedsBalance { .. } => self.to_string(),
             DebtError::PlanNotFound(_) => self.to_string(),
+            DebtError::InvalidPaymentAmount(_) => self.to_string(),
 
             // Database errors should be sanitized
             DebtError::Database(e) => {
@@ -118,7 +122,7 @@ pub enum TransactionError {
     AccountNotFound(i64),
 
     #[error("Failed to categorize transaction")]
-    CategorizationFailed,
+    CategorizationError,
 
     #[error("Database error: {0}")]
     Database(String),
@@ -134,7 +138,7 @@ impl TransactionError {
             TransactionError::InvalidDate(_) => self.to_string(),
             TransactionError::CategoryNotFound(_) => self.to_string(),
             TransactionError::AccountNotFound(_) => self.to_string(),
-            TransactionError::CategorizationFailed => self.to_string(),
+            TransactionError::CategorizationError => self.to_string(),
 
             // Database errors should be sanitized
             TransactionError::Database(e) => {

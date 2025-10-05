@@ -373,7 +373,7 @@ pub async fn record_debt_payment_impl(
     plan_id: Option<i64>,
 ) -> Result<RecordPaymentResponse, DebtError> {
     if amount <= 0.0 {
-        return Err(DebtError::InvalidBalance(amount));
+        return Err(DebtError::InvalidPaymentAmount(amount));
     }
 
     // Use a transaction to ensure atomicity
