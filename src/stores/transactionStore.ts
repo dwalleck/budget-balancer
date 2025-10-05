@@ -1,17 +1,20 @@
 import { create } from 'zustand';
-import { Transaction, TransactionFilter, listTransactions, updateTransactionCategory } from '../lib/tauri';
+import { Transaction, TransactionFilter, listTransactions, countTransactions, updateTransactionCategory } from '../lib/tauri';
 
 interface TransactionStore {
   transactions: Transaction[];
+  totalCount: number;
   loading: boolean;
   error: string | null;
 
   fetchTransactions: (filter?: TransactionFilter) => Promise<void>;
+  fetchCount: (filter?: TransactionFilter) => Promise<void>;
   updateCategory: (transactionId: number, categoryId: number) => Promise<void>;
 }
 
 export const useTransactionStore = create<TransactionStore>((set, get) => ({
   transactions: [],
+  totalCount: 0,
   loading: false,
   error: null,
 
@@ -22,6 +25,15 @@ export const useTransactionStore = create<TransactionStore>((set, get) => ({
       set({ transactions, loading: false });
     } catch (error) {
       set({ error: String(error), loading: false });
+    }
+  },
+
+  fetchCount: async (filter?: TransactionFilter) => {
+    try {
+      const totalCount = await countTransactions(filter);
+      set({ totalCount });
+    } catch (error) {
+      set({ error: String(error) });
     }
   },
 

@@ -323,6 +323,258 @@ if filter.account_id.is_some() {
 
 ---
 
+#### 9a. Dynamic SQL Query Building Pattern (CODE QUALITY)
+**Issue**: String concatenation pattern for building SQL queries contradicts SECURITY.md guidelines
+
+**Source**: PR #3 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/3#issuecomment-3368687969)
+
+**Current State**:
+- `list_transactions_impl` (transaction_commands.rs:20-91) builds queries via string concatenation
+- While currently safe (uses proper parameterized bindings), the pattern itself is risky
+- Contradicts SECURITY.md best practices
+- Future developers might copy the pattern and introduce vulnerabilities
+
+**Example Current Code**:
+```rust
+let mut query = String::from("SELECT ... WHERE 1=1");
+if filter.account_id.is_some() {
+    query.push_str(" AND account_id = ?");  // Safe but risky pattern
+}
+// ... more string building
+let mut query_builder = sqlx::query_as::<_, Transaction>(&query);
+```
+
+**Impact**:
+- Low (currently safe due to proper parameterization)
+- Pattern could be copied incorrectly in future code
+- Inconsistent with documented best practices
+
+**Planned Fix**:
+1. Refactor to use SQLx query builder or similar safe abstraction
+2. Consider creating a TransactionQueryBuilder helper
+3. Update SECURITY.md examples if needed
+4. Ensure pattern is consistent across codebase
+
+**Priority**: 🟢 LOW
+**Effort**: 2-3 hours
+**Target**: Week 3
+**Status**: Deferred from PR #3 review (reviewer approved merge with this as future improvement)
+
+**Files Affected**:
+- `src-tauri/src/commands/transaction_commands.rs` (list_transactions_impl)
+- Potentially other command files with similar patterns
+
+---
+
+#### 9b. Structured Logging Framework (CODE QUALITY)
+**Issue**: Basic `eprintln!` logging lacks production-grade observability features
+
+**Source**: PR #4 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/4#issuecomment-3368699208)
+
+**Current State**:
+- Error sanitization module uses `eprintln!` for logging (errors.rs:9)
+- Works for development but lacks:
+  - Log levels (trace, debug, info, warn, error)
+  - Structured logging (JSON output, context fields)
+  - Log filtering and configuration
+  - Production observability tools integration
+
+**Example Current Code**:
+```rust
+pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
+    eprintln!("Database error during {}: {}", operation, error);
+    format!("Failed to {}", operation)
+}
+```
+
+**Impact**:
+- Low (works for development)
+- Harder to debug production issues
+- No log level filtering
+- Lacks structured context for monitoring tools
+
+**Planned Fix**:
+1. Add `tracing` crate for structured logging
+2. Replace `eprintln!` with `tracing::error!` and appropriate log levels
+3. Add context fields (operation type, error codes, etc.)
+4. Configure log filtering via environment variables
+5. Consider adding `tracing-subscriber` for formatting options
+
+**Example After**:
+```rust
+use tracing::error;
+
+pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
+    error!(
+        operation = %operation,
+        error = %error,
+        "Database operation failed"
+    );
+    format!("Failed to {}", operation)
+}
+```
+
+**Benefits**:
+- Better production debugging
+- Structured logs work with monitoring tools (e.g., DataDog, Sentry)
+- Configurable log levels per module
+- Async-aware logging with `tracing`
+
+**Priority**: 🟢 LOW
+**Effort**: 2-3 hours
+**Target**: Week 3
+**Status**: Enhancement suggestion from PR #4 review
+
+**Files Affected**:
+- `src-tauri/src/errors.rs`
+- `src-tauri/Cargo.toml` (add tracing dependencies)
+- Potentially other files using `eprintln!` for logging
+
+---
+
+#### 9c. Duplicate Transaction Filter Logic (CODE QUALITY)
+**Issue**: Filter building logic duplicated between `list_transactions_impl` and `count_transactions_impl`
+
+**Source**: PR #4 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/4#issuecomment-3368699208)
+
+**Current State**:
+- Both `list_transactions_impl` and `count_transactions_impl` have identical filter logic
+- 50+ lines of duplicated code for handling account_id, category_id, date filters
+- Same pattern repeated: check if filter field is Some, append to query, bind parameter
+
+**Example Duplication**:
+```rust
+// In list_transactions_impl (lines 46-81):
+if filter.account_id.is_some() {
+    query.push_str(" AND account_id = ?");
+}
+if filter.category_id.is_some() {
+    query.push_str(" AND category_id = ?");
+}
+// ... repeated in count_transactions_impl (lines 107-133)
+```
+
+**Impact**:
+- Low (functionality works correctly)
+- Maintenance burden: changes must be made in both places
+- Risk of inconsistency if one is updated and the other isn't
+- Violates DRY principle
+
+**Planned Fix**:
+1. Create shared filter builder helper function
+2. Extract common filter logic to utility
+3. Both functions call the shared helper
+
+**Example After**:
+```rust
+fn apply_transaction_filters(
+    query: &mut String,
+    filter: &TransactionFilter,
+) -> Vec<FilterParam> {
+    let mut params = Vec::new();
+
+    if filter.account_id.is_some() {
+        query.push_str(" AND account_id = ?");
+        params.push(FilterParam::AccountId);
+    }
+    // ... other filters
+
+    params
+}
+
+// Then both functions use it:
+let params = apply_transaction_filters(&mut query, &filter);
+```
+
+**Benefits**:
+- Single source of truth for filter logic
+- Easier to add new filters (only one place to update)
+- Reduces code duplication
+- Improves maintainability
+
+**Priority**: 🟢 LOW
+**Effort**: 1-2 hours
+**Target**: Week 3
+**Status**: Enhancement suggestion from PR #4 review
+**Note**: Can be combined with #9a (dynamic SQL query building refactor) for efficiency
+
+**Files Affected**:
+- `src-tauri/src/commands/transaction_commands.rs`
+- Potentially new `src-tauri/src/utils/query_builder.rs` helper module
+
+---
+
+#### 9d. Edge Case Test Coverage (CODE QUALITY)
+**Issue**: Missing tests for edge cases and error conditions in pagination and error handling
+
+**Source**: PR #4 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/4#issuecomment-3368699208)
+
+**Current State**:
+- Basic pagination tests cover happy path (default limit, max limit enforcement)
+- Missing edge case coverage for boundary conditions
+- Error sanitization not explicitly tested
+- Combined filter scenarios not tested
+
+**Suggested Tests to Add**:
+
+1. **Pagination Edge Cases**:
+   - `test_pagination_with_zero_limit` - Should use default (50) when limit=0
+   - `test_pagination_with_negative_offset` - Should handle gracefully (use 0 or error)
+   - `test_pagination_with_negative_limit` - Should handle gracefully
+
+2. **Filter Combinations**:
+   - `test_count_with_all_filters_combined` - Test account_id + category_id + date range
+   - `test_list_with_all_filters_combined` - Verify all filters work together
+
+3. **Error Sanitization**:
+   - `test_error_messages_no_database_paths` - Verify no file paths exposed
+   - `test_error_messages_no_sql_exposed` - Verify no SQL queries in errors
+   - `test_invalid_account_id_returns_safe_error` - Generic error message
+
+**Example Test**:
+```rust
+#[tokio::test]
+async fn test_pagination_with_zero_limit() {
+    let filter = Some(TransactionFilter {
+        limit: Some(0), // Edge case: zero limit
+        offset: Some(0),
+        ..Default::default()
+    });
+
+    let result = list_transactions_impl(db, filter).await.unwrap();
+
+    // Should default to 50, not return 0 or all items
+    assert!(result.len() <= 50, "Zero limit should use default");
+}
+
+#[tokio::test]
+async fn test_error_messages_no_database_paths() {
+    let result = list_transactions_impl(db_with_error, None).await;
+
+    if let Err(msg) = result {
+        assert!(!msg.contains("/"), "Error should not contain file paths");
+        assert!(!msg.contains("database"), "Error should be generic");
+    }
+}
+```
+
+**Benefits**:
+- Better edge case coverage
+- Explicitly tests security requirements (no info disclosure)
+- Catches potential bugs in boundary conditions
+- Documents expected behavior for edge cases
+
+**Priority**: 🟢 LOW
+**Effort**: 1-2 hours
+**Target**: Week 3
+**Status**: Enhancement suggestion from PR #4 review
+
+**Files Affected**:
+- `src-tauri/tests/integration/test_transaction_commands.rs`
+- `src-tauri/tests/integration/test_security.rs`
+
+---
+
 ## Additional Enhancements (Nice to Have)
 
 ### 10. Database Backup/Export Functionality
@@ -384,11 +636,19 @@ if filter.account_id.is_some() {
 - [ ] Extract magic numbers to constants (#7)
 - [ ] Standardize error handling (#8)
 - [ ] Remove remaining code duplication (#9)
+- [ ] Refactor dynamic SQL query building pattern (#9a - from PR #3 review)
+- [ ] Implement structured logging framework (#9b - from PR #4 review)
+- [ ] Extract duplicate transaction filter logic (#9c - from PR #4 review)
+- [ ] Add edge case test coverage (#9d - from PR #4 review)
 
 **Success Criteria**:
 - No magic numbers in code
 - Consistent error handling across modules
 - DRY principles enforced
+- SQL query building uses safer patterns (querybuilder or prepared statements)
+- Production-grade logging with tracing framework
+- Transaction filter logic shared between list and count operations
+- Edge cases tested (zero/negative limits, combined filters, error sanitization)
 
 ---
 

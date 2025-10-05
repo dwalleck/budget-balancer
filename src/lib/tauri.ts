@@ -83,6 +83,11 @@ export const listTransactions = (
 ): Promise<Transaction[]> =>
   invoke('list_transactions', { filter });
 
+export const countTransactions = (
+  filter?: TransactionFilter
+): Promise<number> =>
+  invoke('count_transactions', { filter });
+
 export const updateTransactionCategory = (
   transactionId: number,
   categoryId: number

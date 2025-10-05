@@ -1,3 +1,4 @@
+use crate::errors::sanitize_db_error;
 use crate::models::account::{Account, NewAccount};
 use crate::DbPool;
 use sqlx::SqlitePool;
@@ -10,7 +11,7 @@ pub async fn list_accounts_impl(db: &SqlitePool) -> Result<Vec<Account>, String>
     )
     .fetch_all(db)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| sanitize_db_error(e, "load accounts"))
 }
 
 pub async fn create_account_impl(
@@ -25,7 +26,7 @@ pub async fn create_account_impl(
     .bind(account.initial_balance)
     .execute(db)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| sanitize_db_error(e, "create account"))?;
 
     Ok(result.last_insert_rowid())
 }

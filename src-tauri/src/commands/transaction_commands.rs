@@ -1,4 +1,5 @@
 use crate::constants::{DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use crate::errors::sanitize_db_error;
 use crate::models::transaction::Transaction;
 use crate::services::categorizer::Categorizer;
 use crate::DbPool;
@@ -35,8 +36,13 @@ pub async fn list_transactions_impl(
         offset: Some(DEFAULT_OFFSET),
     });
 
-    // Enforce maximum page size
-    let limit = filter.limit.map(|l| l.min(MAX_PAGE_SIZE));
+    // ALWAYS enforce pagination defaults and maximum page size
+    // This prevents returning all transactions at once, which could cause performance issues
+    let limit = filter
+        .limit
+        .unwrap_or(DEFAULT_PAGE_SIZE)
+        .min(MAX_PAGE_SIZE);
+    let offset = filter.offset.unwrap_or(DEFAULT_OFFSET);
 
     if filter.account_id.is_some() {
         query.push_str(" AND account_id = ?");
@@ -53,12 +59,8 @@ pub async fn list_transactions_impl(
 
     query.push_str(" ORDER BY date DESC");
 
-    if limit.is_some() {
-        query.push_str(" LIMIT ?");
-    }
-    if filter.offset.is_some() {
-        query.push_str(" OFFSET ?");
-    }
+    // ALWAYS add LIMIT and OFFSET for pagination
+    query.push_str(" LIMIT ? OFFSET ?");
 
     let mut query_builder = sqlx::query_as::<_, Transaction>(&query);
 
@@ -74,12 +76,9 @@ pub async fn list_transactions_impl(
     if let Some(end_date) = filter.end_date {
         query_builder = query_builder.bind(end_date);
     }
-    if let Some(limit_val) = limit {
-        query_builder = query_builder.bind(limit_val);
-    }
-    if let Some(offset) = filter.offset {
-        query_builder = query_builder.bind(offset);
-    }
+
+    // Bind limit and offset (always present now)
+    query_builder = query_builder.bind(limit).bind(offset);
 
     query_builder
         .fetch_all(db)
@@ -87,6 +86,60 @@ pub async fn list_transactions_impl(
         .map_err(|e| {
             eprintln!("Database error loading transactions: {}", e);
             "Failed to load transactions".to_string()
+        })
+}
+
+pub async fn count_transactions_impl(
+    db: &SqlitePool,
+    filter: Option<TransactionFilter>,
+) -> Result<i64, String> {
+    let mut query = String::from("SELECT COUNT(*) FROM transactions WHERE 1=1");
+
+    let filter = filter.unwrap_or(TransactionFilter {
+        account_id: None,
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        limit: None,
+        offset: None,
+    });
+
+    // Apply same filters as list_transactions_impl (except limit/offset)
+    if filter.account_id.is_some() {
+        query.push_str(" AND account_id = ?");
+    }
+    if filter.category_id.is_some() {
+        query.push_str(" AND category_id = ?");
+    }
+    if filter.start_date.is_some() {
+        query.push_str(" AND date >= ?");
+    }
+    if filter.end_date.is_some() {
+        query.push_str(" AND date <= ?");
+    }
+
+    let mut query_builder = sqlx::query_as::<_, (i64,)>(&query);
+
+    if let Some(account_id) = filter.account_id {
+        query_builder = query_builder.bind(account_id);
+    }
+    if let Some(category_id) = filter.category_id {
+        query_builder = query_builder.bind(category_id);
+    }
+    if let Some(start_date) = filter.start_date {
+        query_builder = query_builder.bind(start_date);
+    }
+    if let Some(end_date) = filter.end_date {
+        query_builder = query_builder.bind(end_date);
+    }
+
+    query_builder
+        .fetch_one(db)
+        .await
+        .map(|(count,)| count)
+        .map_err(|e| {
+            eprintln!("Database error counting transactions: {}", e);
+            "Failed to count transactions".to_string()
         })
 }
 
@@ -126,7 +179,7 @@ pub async fn categorize_transaction_impl(
     .bind(transaction_id)
     .fetch_one(db)
     .await
-    .map_err(|e| format!("Transaction not found: {}", e))?;
+    .map_err(|e| sanitize_db_error(e, "load transaction for categorization"))?;
 
     // Use categorizer to find best category
     let category_id = Categorizer::categorize(
@@ -147,7 +200,7 @@ pub async fn categorize_transaction_impl(
         .bind(transaction_id)
         .execute(db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| sanitize_db_error(e, "update transaction category"))?;
 
     Ok(CategorizeResult {
         category_id,
@@ -275,4 +328,12 @@ pub async fn export_transactions(
     filter: Option<TransactionFilter>,
 ) -> Result<ExportResult, String> {
     export_transactions_impl(&db_pool.0, format, output_path, filter).await
+}
+
+#[tauri::command]
+pub async fn count_transactions(
+    db_pool: tauri::State<'_, DbPool>,
+    filter: Option<TransactionFilter>,
+) -> Result<i64, String> {
+    count_transactions_impl(&db_pool.0, filter).await
 }
