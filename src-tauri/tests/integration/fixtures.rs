@@ -1,7 +1,31 @@
-// Test fixtures for creating test data without CSV imports
-// This bypasses the rate limiter and makes tests run faster
+//! Test fixtures for creating test data without CSV imports.
+//!
+//! This module provides helper functions to create test data by inserting directly
+//! into the database, bypassing the CSV import flow and rate limiter. This approach
+//! has several benefits:
+//!
+//! - **Performance**: Tests run faster without CSV parsing overhead
+//! - **Reliability**: Avoids rate limiter issues in parallel test execution
+//! - **Simplicity**: Cleaner test code with builder pattern API
+//! - **Isolation**: Each test gets unique data via timestamps
+//!
+//! # Hash Uniqueness Strategy
+//!
+//! Transaction hashes are calculated from (date + amount + description) per the
+//! production duplicate detection logic. To prevent hash collisions when tests run
+//! in parallel, we append a microsecond timestamp to each description. This ensures
+//! that even identical test data across different tests will have unique hashes.
+//!
+//! Alternative approaches considered:
+//! - Shared counter (requires mutex, slower)
+//! - Random numbers (can still collide)
+//! - Test name in description (invasive, requires test context)
+//!
+//! The timestamp approach provides the best balance of simplicity, performance,
+//! and guaranteed uniqueness.
 
 use budget_balancer_lib::commands::account_commands::create_account_impl;
+use budget_balancer_lib::constants::DEFAULT_CATEGORY_ID;
 use budget_balancer_lib::models::account::{AccountType, NewAccount};
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqlitePool};
@@ -41,7 +65,7 @@ pub async fn insert_test_transactions(
         .bind(tx.amount)
         .bind(&tx.description)
         .bind(&tx.merchant)
-        .bind(tx.category_id.unwrap_or(10)) // Default to Uncategorized
+        .bind(tx.category_id.unwrap_or(DEFAULT_CATEGORY_ID)) // Default to Uncategorized
         .bind(&hash)
         .fetch_one(db)
         .await
