@@ -37,6 +37,12 @@ pub const MAX_DESCRIPTION_LENGTH: usize = 500;
 /// Maximum merchant name length
 pub const MAX_MERCHANT_LENGTH: usize = 200;
 
+/// Maximum search query length
+pub const MAX_SEARCH_QUERY_LENGTH: usize = 100;
+
+/// Maximum number of IDs allowed in bulk operations
+pub const MAX_BULK_OPERATION_IDS: usize = 1000;
+
 // ===== Pagination Defaults =====
 
 /// Default number of items per page

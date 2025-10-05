@@ -1,4 +1,7 @@
-use crate::constants::{DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use crate::constants::{
+    DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_BULK_OPERATION_IDS,
+    MAX_PAGE_SIZE, MAX_SEARCH_QUERY_LENGTH,
+};
 use crate::errors::TransactionError;
 use crate::models::transaction::Transaction;
 use crate::services::categorizer::Categorizer;
@@ -373,8 +376,10 @@ pub async fn search_transactions_impl(
     filter: Option<TransactionFilter>,
 ) -> Result<Vec<Transaction>, TransactionError> {
     // Validate query length
-    if query.len() > 100 {
-        return Err(TransactionError::ValidationError("Search query too long (max 100 characters)".to_string()));
+    if query.len() > MAX_SEARCH_QUERY_LENGTH {
+        return Err(TransactionError::ValidationError(
+            format!("Search query too long (max {} characters)", MAX_SEARCH_QUERY_LENGTH)
+        ));
     }
 
     // Add search to filter
@@ -447,8 +452,10 @@ pub async fn bulk_delete_transactions_impl(
     if transaction_ids.is_empty() {
         return Err(TransactionError::ValidationError("Transaction IDs cannot be empty".to_string()));
     }
-    if transaction_ids.len() > 1000 {
-        return Err(TransactionError::ValidationError("Cannot delete more than 1000 transactions at once".to_string()));
+    if transaction_ids.len() > MAX_BULK_OPERATION_IDS {
+        return Err(TransactionError::ValidationError(
+            format!("Cannot delete more than {} transactions at once", MAX_BULK_OPERATION_IDS)
+        ));
     }
 
     let mut deleted_count = 0i64;
@@ -495,8 +502,10 @@ pub async fn bulk_update_category_impl(
     if transaction_ids.is_empty() {
         return Err(TransactionError::ValidationError("Transaction IDs cannot be empty".to_string()));
     }
-    if transaction_ids.len() > 1000 {
-        return Err(TransactionError::ValidationError("Cannot update more than 1000 transactions at once".to_string()));
+    if transaction_ids.len() > MAX_BULK_OPERATION_IDS {
+        return Err(TransactionError::ValidationError(
+            format!("Cannot update more than {} transactions at once", MAX_BULK_OPERATION_IDS)
+        ));
     }
 
     // Verify category exists

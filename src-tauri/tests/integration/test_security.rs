@@ -2,7 +2,9 @@
 
 use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::csv_commands::{get_csv_headers, import_csv_impl, reset_rate_limiter};
-use budget_balancer_lib::commands::transaction_commands::{list_transactions_impl, TransactionFilter};
+use budget_balancer_lib::commands::transaction_commands::{
+    list_transactions_impl, search_transactions_impl, TransactionFilter,
+};
 use budget_balancer_lib::constants::BYTES_PER_MB;
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
@@ -225,6 +227,76 @@ async fn test_sql_injection_attempts_various_inputs() {
             input
         );
     }
+}
+
+#[tokio::test]
+async fn test_sql_injection_in_search_query() {
+    reset_rate_limiter();
+    let db = super::get_test_db_pool().await;
+
+    // Create test account and transaction
+    let account = NewAccount {
+        name: super::unique_name("SQL Injection Search Test"),
+        account_type: budget_balancer_lib::models::account::AccountType::Checking,
+        initial_balance: 0.0,
+    };
+    let account_id = create_account_impl(db, account).await.unwrap();
+
+    let csv_content = "Date,Amount,Description\n2025-01-01,-50.00,Normal Transaction";
+    let mapping = ColumnMapping {
+        date: "Date".to_string(),
+        amount: "Amount".to_string(),
+        description: "Description".to_string(),
+        merchant: None,
+    };
+
+    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
+        .await
+        .unwrap();
+
+    // Attempt SQL injection via search query
+    let malicious_queries = vec![
+        "' OR '1'='1",
+        "'; DROP TABLE transactions;--",
+        "' UNION SELECT * FROM sqlite_master--",
+        "1' AND '1'='1",
+        "%' OR 1=1--",
+        "' OR 'x'='x",
+    ];
+
+    for malicious_query in malicious_queries {
+        let result = search_transactions_impl(db, malicious_query.to_string(), None).await;
+
+        // Should handle safely - parameterized LIKE queries should treat special chars as literals
+        assert!(
+            result.is_ok(),
+            "Parameterized LIKE query should handle injection attempt safely: {}",
+            malicious_query
+        );
+
+        // Verify database integrity after each attempt
+        let integrity_check: Result<(i64,), _> =
+            sqlx::query_as("SELECT COUNT(*) FROM transactions")
+                .fetch_one(db)
+                .await;
+
+        assert!(
+            integrity_check.is_ok(),
+            "Database integrity compromised by search query: {}",
+            malicious_query
+        );
+    }
+
+    // Verify the transactions table structure is intact
+    let table_check: Result<Vec<(String,)>, _> =
+        sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'")
+            .fetch_all(db)
+            .await;
+
+    assert!(
+        table_check.is_ok() && !table_check.unwrap().is_empty(),
+        "Transactions table should still exist after injection attempts"
+    );
 }
 
 // ==== Error Message Security Tests ====
