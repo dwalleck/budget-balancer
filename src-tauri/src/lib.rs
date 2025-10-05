@@ -1,10 +1,12 @@
 // Budget Balancer - Tauri Application
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+pub mod constants;
 pub mod db;
 pub mod models;
 pub mod services;
 pub mod commands;
+pub mod utils;
 
 use sqlx::SqlitePool;
 use tauri::Manager;

@@ -1,9 +1,15 @@
+use crate::constants::{MAX_CSV_FILE_SIZE, MAX_CSV_ROWS, MIN_CSV_IMPORT_INTERVAL_MS};
 use crate::models::column_mapping::NewColumnMapping;
 use crate::services::csv_parser::{ColumnMapping, CsvParser};
 use crate::services::transaction_importer::TransactionImporter;
+use crate::utils::rate_limiter::RateLimiter;
 use crate::DbPool;
+use once_cell::sync::Lazy;
 use serde::Serialize;
 use sqlx::SqlitePool;
+
+// Global rate limiter for CSV imports
+static CSV_RATE_LIMITER: Lazy<RateLimiter> = Lazy::new(|| RateLimiter::new(MIN_CSV_IMPORT_INTERVAL_MS));
 
 #[derive(Debug, Serialize)]
 pub struct ImportResult {
@@ -49,6 +55,23 @@ pub async fn import_csv_impl(
     csv_content: String,
     mapping: ColumnMapping,
 ) -> Result<ImportResult, String> {
+    // Validate file size
+    if csv_content.len() > MAX_CSV_FILE_SIZE {
+        return Err(format!(
+            "File too large. Maximum size is {} MB.",
+            MAX_CSV_FILE_SIZE / (1024 * 1024)
+        ));
+    }
+
+    // Validate row count (approximate by counting newlines)
+    let row_count = csv_content.lines().count();
+    if row_count > MAX_CSV_ROWS {
+        return Err(format!(
+            "Too many rows. Maximum is {} rows, found approximately {}.",
+            MAX_CSV_ROWS, row_count
+        ));
+    }
+
     match TransactionImporter::import(db, account_id, &csv_content, &mapping).await {
         Ok(stats) => Ok(ImportResult {
             success: true,
@@ -61,7 +84,10 @@ pub async fn import_csv_impl(
                 stats.imported, stats.total, stats.duplicates, stats.errors
             ),
         }),
-        Err(e) => Err(e.to_string()),
+        Err(e) => {
+            eprintln!("CSV import error: {}", e);  // Log detailed error
+            Err("Failed to import CSV file. Please check the file format.".to_string())  // Return safe message
+        }
     }
 }
 
@@ -69,7 +95,18 @@ pub async fn import_csv_impl(
 
 #[tauri::command]
 pub async fn get_csv_headers(csv_content: String) -> Result<Vec<String>, String> {
-    CsvParser::get_headers(&csv_content).map_err(|e| e.to_string())
+    // Validate file size
+    if csv_content.len() > MAX_CSV_FILE_SIZE {
+        return Err(format!(
+            "File too large. Maximum size is {} MB.",
+            MAX_CSV_FILE_SIZE / (1024 * 1024)
+        ));
+    }
+
+    CsvParser::get_headers(&csv_content).map_err(|e| {
+        eprintln!("CSV header parsing error: {}", e);
+        "Failed to parse CSV headers. Please check the file format.".to_string()
+    })
 }
 
 #[tauri::command]
@@ -87,5 +124,8 @@ pub async fn import_csv(
     csv_content: String,
     mapping: ColumnMapping,
 ) -> Result<ImportResult, String> {
+    // Check rate limit
+    CSV_RATE_LIMITER.check_and_update()?;
+
     import_csv_impl(&db_pool.0, account_id, csv_content, mapping).await
 }
