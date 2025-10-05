@@ -2,11 +2,13 @@
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 /// Error returned when a request is rate limited
 ///
 /// Contains the number of seconds to wait before the next request will be allowed
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Error)]
+#[error("Rate limit exceeded. Please wait {wait_seconds:.1} seconds before trying again")]
 pub struct RateLimitError {
     /// Remaining seconds to wait before next request
     pub wait_seconds: f64,
