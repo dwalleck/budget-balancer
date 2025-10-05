@@ -1,4 +1,5 @@
 use crate::constants::{DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use crate::errors::sanitize_db_error;
 use crate::models::transaction::Transaction;
 use crate::services::categorizer::Categorizer;
 use crate::DbPool;
@@ -178,7 +179,7 @@ pub async fn categorize_transaction_impl(
     .bind(transaction_id)
     .fetch_one(db)
     .await
-    .map_err(|e| format!("Transaction not found: {}", e))?;
+    .map_err(|e| sanitize_db_error(e, "load transaction for categorization"))?;
 
     // Use categorizer to find best category
     let category_id = Categorizer::categorize(
@@ -199,7 +200,7 @@ pub async fn categorize_transaction_impl(
         .bind(transaction_id)
         .execute(db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| sanitize_db_error(e, "update transaction category"))?;
 
     Ok(CategorizeResult {
         category_id,
