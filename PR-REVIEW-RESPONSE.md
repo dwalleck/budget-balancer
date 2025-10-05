@@ -366,6 +366,72 @@ let mut query_builder = sqlx::query_as::<_, Transaction>(&query);
 
 ---
 
+#### 9b. Structured Logging Framework (CODE QUALITY)
+**Issue**: Basic `eprintln!` logging lacks production-grade observability features
+
+**Source**: PR #4 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/4#issuecomment-3368699208)
+
+**Current State**:
+- Error sanitization module uses `eprintln!` for logging (errors.rs:9)
+- Works for development but lacks:
+  - Log levels (trace, debug, info, warn, error)
+  - Structured logging (JSON output, context fields)
+  - Log filtering and configuration
+  - Production observability tools integration
+
+**Example Current Code**:
+```rust
+pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
+    eprintln!("Database error during {}: {}", operation, error);
+    format!("Failed to {}", operation)
+}
+```
+
+**Impact**:
+- Low (works for development)
+- Harder to debug production issues
+- No log level filtering
+- Lacks structured context for monitoring tools
+
+**Planned Fix**:
+1. Add `tracing` crate for structured logging
+2. Replace `eprintln!` with `tracing::error!` and appropriate log levels
+3. Add context fields (operation type, error codes, etc.)
+4. Configure log filtering via environment variables
+5. Consider adding `tracing-subscriber` for formatting options
+
+**Example After**:
+```rust
+use tracing::error;
+
+pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
+    error!(
+        operation = %operation,
+        error = %error,
+        "Database operation failed"
+    );
+    format!("Failed to {}", operation)
+}
+```
+
+**Benefits**:
+- Better production debugging
+- Structured logs work with monitoring tools (e.g., DataDog, Sentry)
+- Configurable log levels per module
+- Async-aware logging with `tracing`
+
+**Priority**: 🟢 LOW
+**Effort**: 2-3 hours
+**Target**: Week 3
+**Status**: Enhancement suggestion from PR #4 review
+
+**Files Affected**:
+- `src-tauri/src/errors.rs`
+- `src-tauri/Cargo.toml` (add tracing dependencies)
+- Potentially other files using `eprintln!` for logging
+
+---
+
 ## Additional Enhancements (Nice to Have)
 
 ### 10. Database Backup/Export Functionality
@@ -428,12 +494,14 @@ let mut query_builder = sqlx::query_as::<_, Transaction>(&query);
 - [ ] Standardize error handling (#8)
 - [ ] Remove remaining code duplication (#9)
 - [ ] Refactor dynamic SQL query building pattern (#9a - from PR #3 review)
+- [ ] Implement structured logging framework (#9b - from PR #4 review)
 
 **Success Criteria**:
 - No magic numbers in code
 - Consistent error handling across modules
 - DRY principles enforced
 - SQL query building uses safer patterns (querybuilder or prepared statements)
+- Production-grade logging with tracing framework
 
 ---
 
