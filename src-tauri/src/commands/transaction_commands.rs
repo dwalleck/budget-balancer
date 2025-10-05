@@ -48,13 +48,14 @@ impl TransactionFilterBuilder {
             where_clauses.push(" AND date <= ?".to_string());
         }
         if filter.search.is_some() {
-            where_clauses.push(" AND (LOWER(description) LIKE LOWER(?) ESCAPE '\\' OR LOWER(merchant) LIKE LOWER(?) ESCAPE '\\')".to_string());
+            where_clauses.push(" AND (LOWER(description) LIKE LOWER(?) ESCAPE '!' OR LOWER(merchant) LIKE LOWER(?) ESCAPE '!')".to_string());
         }
 
         // Format search pattern here to own it
         // Escape LIKE wildcards (% and _) to prevent pattern injection
+        // Using ! as the escape character to avoid ambiguity with backslash
         let search = filter.search.clone().map(|s| {
-            let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+            let escaped = s.replace('!', "!!").replace('%', "!%").replace('_', "!_");
             format!("%{}%", escaped)
         });
 
@@ -463,25 +464,21 @@ pub async fn bulk_delete_transactions_impl(
     }
 
     // First, check which IDs exist before deletion (to identify non-existent IDs later)
-    let existing_ids_before: std::collections::HashSet<i64> = if transaction_ids.len() > 0 {
-        let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
+    let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
 
-        let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
-        for id in &transaction_ids {
-            check_query = check_query.bind(id);
-        }
+    let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
+    for id in &transaction_ids {
+        check_query = check_query.bind(id);
+    }
 
-        check_query
-            .fetch_all(db)
-            .await
-            .map_err(|e| TransactionError::Database(e.to_string()))?
-            .into_iter()
-            .map(|(id,)| id)
-            .collect()
-    } else {
-        std::collections::HashSet::new()
-    };
+    let existing_ids_before: std::collections::HashSet<i64> = check_query
+        .fetch_all(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?
+        .into_iter()
+        .map(|(id,)| id)
+        .collect();
 
     // Build batched DELETE query with IN clause for performance
     // This executes 1 query instead of N queries (potentially 1000x faster)
@@ -560,25 +557,21 @@ pub async fn bulk_update_category_impl(
     }
 
     // First, check which IDs exist before update (to identify non-existent IDs)
-    let existing_ids_before: std::collections::HashSet<i64> = if transaction_ids.len() > 0 {
-        let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
+    let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
 
-        let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
-        for id in &transaction_ids {
-            check_query = check_query.bind(id);
-        }
+    let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
+    for id in &transaction_ids {
+        check_query = check_query.bind(id);
+    }
 
-        check_query
-            .fetch_all(db)
-            .await
-            .map_err(|e| TransactionError::Database(e.to_string()))?
-            .into_iter()
-            .map(|(id,)| id)
-            .collect()
-    } else {
-        std::collections::HashSet::new()
-    };
+    let existing_ids_before: std::collections::HashSet<i64> = check_query
+        .fetch_all(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?
+        .into_iter()
+        .map(|(id,)| id)
+        .collect();
 
     // Build batched UPDATE query with IN clause for performance
     // This executes 1 query instead of N queries (potentially 1000x faster)

@@ -9,8 +9,18 @@ use once_cell::sync::Lazy;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
+// Get rate limiter interval from environment variable or use default
+// Set CSV_RATE_LIMIT_MS=50 for fast test execution
+// Defaults to 2000ms (MIN_CSV_IMPORT_INTERVAL_MS) in production
+fn get_rate_limit_interval() -> u64 {
+    std::env::var("CSV_RATE_LIMIT_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(MIN_CSV_IMPORT_INTERVAL_MS)
+}
+
 // Global rate limiter for CSV imports
-static CSV_RATE_LIMITER: Lazy<RateLimiter> = Lazy::new(|| RateLimiter::new(MIN_CSV_IMPORT_INTERVAL_MS));
+static CSV_RATE_LIMITER: Lazy<RateLimiter> = Lazy::new(|| RateLimiter::new(get_rate_limit_interval()));
 
 // Test helper to reset rate limiter between tests
 // Note: This is public to allow integration tests to reset the rate limiter

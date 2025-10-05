@@ -1,6 +1,8 @@
 use budget_balancer_lib::commands::analytics_commands::get_dashboard_summary_impl;
+use serial_test::serial;
 
 #[tokio::test]
+#[serial]
 async fn test_get_dashboard_summary_current_month() {
     let db = super::get_test_db_pool().await;
     let result = get_dashboard_summary_impl(db, "current_month").await;
@@ -15,6 +17,7 @@ async fn test_get_dashboard_summary_current_month() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_get_dashboard_summary_last_30_days() {
     let db = super::get_test_db_pool().await;
     let result = get_dashboard_summary_impl(db, "last_30_days").await;
@@ -31,6 +34,7 @@ async fn test_get_dashboard_summary_last_30_days() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_get_dashboard_summary_current_year() {
     let db = super::get_test_db_pool().await;
     let result = get_dashboard_summary_impl(db, "current_year").await;
@@ -39,6 +43,7 @@ async fn test_get_dashboard_summary_current_year() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_dashboard_with_data() {
     let db = super::get_test_db_pool().await;
     let account_id = super::fixtures::create_test_account(db, "Dashboard Test").await;

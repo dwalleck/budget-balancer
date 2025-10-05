@@ -22,8 +22,8 @@ mod test_update_target;
 use sqlx::SqlitePool;
 use std::sync::OnceLock;
 
-/// Rate limiter minimum interval is 2 seconds, so we wait 2100ms to ensure it has elapsed
-pub const RATE_LIMITER_DELAY_MS: u64 = 2100;
+/// Rate limiter uses 50ms interval in tests (via cfg(test)), so we wait 60ms to ensure it has elapsed
+pub const RATE_LIMITER_DELAY_MS: u64 = 60;
 
 // Static database pool shared across all tests
 static DB_POOL: OnceLock<SqlitePool> = OnceLock::new();

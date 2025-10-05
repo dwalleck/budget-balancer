@@ -278,6 +278,7 @@ async fn test_calculate_payoff_plan_insufficient_funds() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_calculate_payoff_plan_invalid_strategy() {
     let db = super::get_test_db_pool().await;
     // Clean slate for this test
