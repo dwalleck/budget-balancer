@@ -1,6 +1,7 @@
 use super::csv_parser::{CsvParser, ColumnMapping};
 use super::duplicate_detector::DuplicateDetector;
 use super::categorizer::Categorizer;
+use crate::constants::DEFAULT_CATEGORY_ID;
 use crate::models::transaction::NewTransaction;
 
 #[derive(Debug)]
@@ -73,7 +74,7 @@ impl TransactionImporter {
             )
             .await
             .map_err(|e| ImportError::CategorizerError(e.to_string()))?
-            .unwrap_or(10); // Default to uncategorized
+            .unwrap_or(DEFAULT_CATEGORY_ID); // Default to uncategorized
 
             // Calculate hash
             let hash = NewTransaction::calculate_hash(

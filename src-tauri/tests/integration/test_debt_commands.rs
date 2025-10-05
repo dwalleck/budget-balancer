@@ -78,7 +78,8 @@ async fn test_create_debt_invalid_interest_rate() {
 
     let result = create_debt_impl(db, debt).await;
     assert!(result.is_err(), "Should reject invalid interest rate");
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("InvalidRate") || error_msg.contains("interest"),
         "Error should mention invalid rate: {}",
@@ -98,7 +99,8 @@ async fn test_create_debt_negative_balance() {
 
     let result = create_debt_impl(db, debt).await;
     assert!(result.is_err(), "Should reject negative balance");
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("InvalidAmount") || error_msg.contains("balance"),
         "Error should mention invalid amount: {}",
@@ -162,7 +164,8 @@ async fn test_update_debt_not_found() {
     let db = super::get_test_db_pool().await;
     let result = update_debt_impl(db, 99999, Some(1000.0), None, None).await;
     assert!(result.is_err(), "Should fail for non-existent debt");
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("not found") || error_msg.contains("NotFound"),
         "Error should indicate debt not found: {}",
@@ -261,7 +264,8 @@ async fn test_calculate_payoff_plan_insufficient_funds() {
         result.is_err(),
         "Should reject insufficient monthly amount"
     );
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("Insufficient") || error_msg.contains("funds"),
         "Error should mention insufficient funds: {}",
@@ -307,7 +311,8 @@ async fn test_get_payoff_plan_not_found() {
     let db = super::get_test_db_pool().await;
     let result = get_payoff_plan_impl(db, 99999).await;
     assert!(result.is_err(), "Should fail for non-existent plan");
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("not found") || error_msg.contains("NotFound"),
         "Error should indicate plan not found: {}",

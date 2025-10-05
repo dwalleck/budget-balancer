@@ -49,3 +49,22 @@ pub const DEFAULT_OFFSET: i64 = 0;
 
 /// Maximum number of concurrent database connections
 pub const MAX_DB_CONNECTIONS: u32 = 5;
+
+// ===== Financial Calculation Constants =====
+
+/// Number of months in a year (for interest rate calculations)
+pub const MONTHS_PER_YEAR: f64 = 12.0;
+
+/// Divisor to convert percentage to decimal (e.g., 18% -> 0.18)
+pub const PERCENT_TO_DECIMAL_DIVISOR: f64 = 100.0;
+
+/// Maximum years allowed for debt payoff calculations
+pub const MAX_PAYOFF_YEARS: i32 = 100;
+
+// ===== Spending Tracker Thresholds =====
+
+/// Percentage threshold for "under budget" status
+pub const SPENDING_UNDER_THRESHOLD_PERCENT: f64 = 80.0;
+
+/// Percentage threshold for "on track" status (at or below target)
+pub const SPENDING_ON_TRACK_THRESHOLD_PERCENT: f64 = 100.0;

@@ -1,11 +1,12 @@
 /// Utility functions for interest calculations
+use crate::constants::{MONTHS_PER_YEAR, PERCENT_TO_DECIMAL_DIVISOR};
 
 /// Calculate monthly interest on a balance given an annual interest rate
 pub fn calculate_monthly_interest(balance: f64, annual_rate: f64) -> f64 {
     if balance <= 0.0 || annual_rate < 0.0 {
         return 0.0;
     }
-    balance * (annual_rate / 100.0 / 12.0)
+    balance * (annual_rate / PERCENT_TO_DECIMAL_DIVISOR / MONTHS_PER_YEAR)
 }
 
 /// Calculate the total interest paid over a series of payments
@@ -29,7 +30,7 @@ pub fn calculate_total_interest(
 
 /// Calculate effective annual rate from monthly interest rate
 pub fn calculate_effective_annual_rate(monthly_rate: f64) -> f64 {
-    ((1.0 + monthly_rate / 100.0).powi(12) - 1.0) * 100.0
+    ((1.0 + monthly_rate / PERCENT_TO_DECIMAL_DIVISOR).powi(MONTHS_PER_YEAR as i32) - 1.0) * PERCENT_TO_DECIMAL_DIVISOR
 }
 
 /// Calculate new balance after applying monthly interest and payment
