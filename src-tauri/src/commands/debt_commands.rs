@@ -249,7 +249,7 @@ pub async fn calculate_payoff_plan_impl(
     let plan = match strategy.as_str() {
         "avalanche" => AvalancheCalculator::calculate_payoff_plan(debts, monthly_amount)?,
         "snowball" => SnowballCalculator::calculate_payoff_plan(debts, monthly_amount)?,
-        _ => return Err(DebtError::Database("Invalid strategy: must be 'avalanche' or 'snowball'".to_string())),
+        _ => return Err(DebtError::InvalidStrategy(strategy)),
     };
 
     // Save the plan
@@ -315,7 +315,7 @@ pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<Payof
     .fetch_optional(db)
     .await
     .map_err(|e| DebtError::Database(e.to_string()))?
-    .ok_or_else(|| DebtError::Database("Plan not found".to_string()))?;
+    .ok_or_else(|| DebtError::PlanNotFound(plan_id))?;
 
     // Recalculate the plan (plans are not fully stored, just metadata)
     let debts = sqlx::query_as::<_, Debt>(
@@ -329,7 +329,7 @@ pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<Payof
     let calc_plan = match plan.strategy.as_str() {
         "avalanche" => AvalancheCalculator::calculate_payoff_plan(debts, plan.monthly_amount)?,
         "snowball" => SnowballCalculator::calculate_payoff_plan(debts, plan.monthly_amount)?,
-        _ => return Err(DebtError::Database("Invalid strategy in stored plan".to_string())),
+        _ => return Err(DebtError::InvalidStrategy(plan.strategy)),
     };
 
     Ok(PayoffPlanResponse {
@@ -391,7 +391,10 @@ pub async fn record_debt_payment_impl(
     .ok_or_else(|| DebtError::NotFound(debt_id))?;
 
     if amount > debt.balance {
-        return Err(DebtError::Database("Payment exceeds debt balance".to_string()));
+        return Err(DebtError::PaymentExceedsBalance {
+            payment: amount,
+            balance: debt.balance,
+        });
     }
 
     // Record payment

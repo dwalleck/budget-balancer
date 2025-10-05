@@ -79,9 +79,9 @@ async fn test_create_debt_invalid_interest_rate() {
     let result = create_debt_impl(db, debt).await;
     assert!(result.is_err(), "Should reject invalid interest rate");
     let error = result.unwrap_err();
-    let error_msg = error.to_string();
+    let error_msg = error.to_string().to_lowercase();
     assert!(
-        error_msg.contains("InvalidRate") || error_msg.contains("interest"),
+        error_msg.contains("interest"),
         "Error should mention invalid rate: {}",
         error_msg
     );
@@ -100,9 +100,9 @@ async fn test_create_debt_negative_balance() {
     let result = create_debt_impl(db, debt).await;
     assert!(result.is_err(), "Should reject negative balance");
     let error = result.unwrap_err();
-    let error_msg = error.to_string();
+    let error_msg = error.to_string().to_lowercase();
     assert!(
-        error_msg.contains("InvalidAmount") || error_msg.contains("balance"),
+        error_msg.contains("balance"),
         "Error should mention invalid amount: {}",
         error_msg
     );
@@ -273,6 +273,34 @@ async fn test_calculate_payoff_plan_insufficient_funds() {
     );
 }
 
+#[tokio::test]
+async fn test_calculate_payoff_plan_invalid_strategy() {
+    let db = super::get_test_db_pool().await;
+    // Clean slate for this test
+    cleanup_all_debts().await;
+
+    let debt = NewDebt {
+        name: unique_name("Test Debt"),
+        balance: 1000.0,
+        interest_rate: 15.0,
+        min_payment: 50.0,
+    };
+    create_debt_impl(db, debt).await.unwrap();
+
+    let result = calculate_payoff_plan_impl(db, "invalid_strategy".to_string(), 150.0).await;
+    assert!(
+        result.is_err(),
+        "Should reject invalid strategy"
+    );
+    let error = result.unwrap_err();
+    let error_msg = error.to_string().to_lowercase();
+    assert!(
+        error_msg.contains("strategy"),
+        "Error should mention invalid strategy: {}",
+        error_msg
+    );
+}
+
 // T034: Contract test for get_payoff_plan command
 #[tokio::test]
 async fn test_get_payoff_plan() {
@@ -359,6 +387,13 @@ async fn test_record_debt_payment_exceeds_balance() {
     assert!(
         result.is_err(),
         "Should reject payment exceeding balance"
+    );
+    let error = result.unwrap_err();
+    let error_msg = error.to_string().to_lowercase();
+    assert!(
+        error_msg.contains("payment") && error_msg.contains("balance"),
+        "Error should mention payment exceeds balance: {}",
+        error_msg
     );
 }
 

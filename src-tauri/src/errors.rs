@@ -61,6 +61,15 @@ pub enum DebtError {
     #[error("Payoff calculation exceeded {0} years - check debt parameters")]
     PayoffExceeded(i32),
 
+    #[error("Invalid strategy '{0}': must be 'avalanche' or 'snowball'")]
+    InvalidStrategy(String),
+
+    #[error("Payment ${payment:.2} exceeds debt balance ${balance:.2}")]
+    PaymentExceedsBalance { payment: f64, balance: f64 },
+
+    #[error("Debt plan not found with ID {0}")]
+    PlanNotFound(i64),
+
     #[error("Database error: {0}")]
     Database(String),
 }
@@ -77,6 +86,9 @@ impl DebtError {
             DebtError::InsufficientFunds { .. } => self.to_string(),
             DebtError::NoDebts => self.to_string(),
             DebtError::PayoffExceeded(_) => self.to_string(),
+            DebtError::InvalidStrategy(_) => self.to_string(),
+            DebtError::PaymentExceedsBalance { .. } => self.to_string(),
+            DebtError::PlanNotFound(_) => self.to_string(),
 
             // Database errors should be sanitized
             DebtError::Database(e) => {
