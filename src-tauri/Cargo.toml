@@ -36,3 +36,4 @@ serial_test = "3.2"
 rstest = "0.23"
 fake = { version = "2.9", features = ["derive"] }
 rand = "0.8"
+ctor = "0.2"

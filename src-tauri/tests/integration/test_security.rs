@@ -110,8 +110,10 @@ async fn test_csv_row_count_limit_enforced() {
 #[tokio::test]
 #[serial]
 async fn test_csv_import_rate_limiting() {
+    // Note: Tests use a 50ms rate limit for fast execution (set via cfg(test))
+    // This test verifies rate limiting works, even with the shorter interval
     reset_rate_limiter();
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
+    tokio::time::sleep(tokio::time::Duration::from_millis(60)).await; // Ensure reset takes effect
 
     let db = super::get_test_db_pool().await;
 
@@ -131,24 +133,32 @@ async fn test_csv_import_rate_limiting() {
         merchant: None,
     };
 
-    // First import
+    // First import should succeed
     let result1 = import_csv_impl(db, account_id, csv_content.to_string(), mapping.clone()).await;
-    // May succeed or fail depending on timing of other tests
+    assert!(result1.is_ok(), "First import should succeed");
 
-    // Immediate second import - wait a tiny bit to ensure we're testing rate limit
-    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    let result2 = import_csv_impl(db, account_id, csv_content.to_string(), mapping).await;
+    // Immediate second import should be rate limited (within 50ms window)
+    let result2 = import_csv_impl(db, account_id, csv_content.to_string(), mapping.clone()).await;
+    assert!(result2.is_err(), "Second import should be rate limited");
 
-    // At least one should work, and if both are called quickly, second might be rate limited
-    // This test verifies the rate limiter is in place, even if timing makes it non-deterministic
-    if result1.is_ok() && result2.is_err() {
-        let error = result2.unwrap_err();
-        let error_msg = error.to_string();
-        assert!(
-            error_msg.contains("Rate limit") || error_msg.contains("wait"),
-            "Rate limit error should mention rate limiting"
-        );
-    }
+    let error = result2.unwrap_err();
+    let error_msg = error.to_string();
+    assert!(
+        error_msg.contains("Rate limit") || error_msg.contains("wait"),
+        "Rate limit error should mention rate limiting, got: {}",
+        error_msg
+    );
+
+    // After waiting for the rate limit period, import should succeed again
+    tokio::time::sleep(tokio::time::Duration::from_millis(60)).await;
+    // Use different content to avoid duplicate detection
+    let csv_content3 = "Date,Amount,Description\n2024-01-02,-60.00,Test3";
+    let result3 = import_csv_impl(db, account_id, csv_content3.to_string(), mapping).await;
+    assert!(
+        result3.is_ok(),
+        "Third import after waiting should succeed, got error: {:?}",
+        result3.err()
+    );
 }
 
 // ==== SQL Injection Protection Tests ====
