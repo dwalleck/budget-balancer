@@ -8,8 +8,11 @@ pub const DEFAULT_CATEGORY_ID: i64 = 10;
 
 // ===== CSV Import Limits =====
 
+/// Bytes per megabyte constant for file size calculations
+pub const BYTES_PER_MB: usize = 1024 * 1024;
+
 /// Maximum CSV file size in bytes (10 MB)
-pub const MAX_CSV_FILE_SIZE: usize = 10 * 1024 * 1024;
+pub const MAX_CSV_FILE_SIZE: usize = 10 * BYTES_PER_MB;
 
 /// Maximum number of rows allowed in a CSV import
 pub const MAX_CSV_ROWS: usize = 10_000;
