@@ -432,6 +432,78 @@ pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
 
 ---
 
+#### 9c. Duplicate Transaction Filter Logic (CODE QUALITY)
+**Issue**: Filter building logic duplicated between `list_transactions_impl` and `count_transactions_impl`
+
+**Source**: PR #4 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/4#issuecomment-3368699208)
+
+**Current State**:
+- Both `list_transactions_impl` and `count_transactions_impl` have identical filter logic
+- 50+ lines of duplicated code for handling account_id, category_id, date filters
+- Same pattern repeated: check if filter field is Some, append to query, bind parameter
+
+**Example Duplication**:
+```rust
+// In list_transactions_impl (lines 46-81):
+if filter.account_id.is_some() {
+    query.push_str(" AND account_id = ?");
+}
+if filter.category_id.is_some() {
+    query.push_str(" AND category_id = ?");
+}
+// ... repeated in count_transactions_impl (lines 107-133)
+```
+
+**Impact**:
+- Low (functionality works correctly)
+- Maintenance burden: changes must be made in both places
+- Risk of inconsistency if one is updated and the other isn't
+- Violates DRY principle
+
+**Planned Fix**:
+1. Create shared filter builder helper function
+2. Extract common filter logic to utility
+3. Both functions call the shared helper
+
+**Example After**:
+```rust
+fn apply_transaction_filters(
+    query: &mut String,
+    filter: &TransactionFilter,
+) -> Vec<FilterParam> {
+    let mut params = Vec::new();
+
+    if filter.account_id.is_some() {
+        query.push_str(" AND account_id = ?");
+        params.push(FilterParam::AccountId);
+    }
+    // ... other filters
+
+    params
+}
+
+// Then both functions use it:
+let params = apply_transaction_filters(&mut query, &filter);
+```
+
+**Benefits**:
+- Single source of truth for filter logic
+- Easier to add new filters (only one place to update)
+- Reduces code duplication
+- Improves maintainability
+
+**Priority**: 🟢 LOW
+**Effort**: 1-2 hours
+**Target**: Week 3
+**Status**: Enhancement suggestion from PR #4 review
+**Note**: Can be combined with #9a (dynamic SQL query building refactor) for efficiency
+
+**Files Affected**:
+- `src-tauri/src/commands/transaction_commands.rs`
+- Potentially new `src-tauri/src/utils/query_builder.rs` helper module
+
+---
+
 ## Additional Enhancements (Nice to Have)
 
 ### 10. Database Backup/Export Functionality
@@ -495,6 +567,7 @@ pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
 - [ ] Remove remaining code duplication (#9)
 - [ ] Refactor dynamic SQL query building pattern (#9a - from PR #3 review)
 - [ ] Implement structured logging framework (#9b - from PR #4 review)
+- [ ] Extract duplicate transaction filter logic (#9c - from PR #4 review)
 
 **Success Criteria**:
 - No magic numbers in code
@@ -502,6 +575,7 @@ pub fn sanitize_db_error<E: Display>(error: E, operation: &str) -> String {
 - DRY principles enforced
 - SQL query building uses safer patterns (querybuilder or prepared statements)
 - Production-grade logging with tracing framework
+- Transaction filter logic shared between list and count operations
 
 ---
 
