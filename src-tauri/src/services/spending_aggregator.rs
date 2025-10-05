@@ -1,3 +1,4 @@
+use crate::constants::PERCENT_TO_DECIMAL_DIVISOR;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
@@ -91,7 +92,7 @@ impl SpendingAggregator {
             .into_iter()
             .map(|(id, name, icon, amount, count)| {
                 let percentage = if total_spending > 0.0 {
-                    (amount / total_spending) * 100.0
+                    (amount / total_spending) * PERCENT_TO_DECIMAL_DIVISOR
                 } else {
                     0.0
                 };

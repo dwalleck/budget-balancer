@@ -1,4 +1,5 @@
 use crate::constants::{MAX_CSV_FILE_SIZE, MAX_CSV_ROWS, MIN_CSV_IMPORT_INTERVAL_MS};
+use crate::errors::CsvImportError;
 use crate::models::column_mapping::NewColumnMapping;
 use crate::services::csv_parser::{ColumnMapping, CsvParser};
 use crate::services::transaction_importer::TransactionImporter;
@@ -33,7 +34,7 @@ pub struct ImportResult {
 pub async fn save_column_mapping_impl(
     db: &SqlitePool,
     mapping: NewColumnMapping,
-) -> Result<i64, String> {
+) -> Result<i64, CsvImportError> {
     let result = sqlx::query(
         "INSERT INTO column_mappings (source_name, date_col, amount_col, description_col, merchant_col)
          VALUES (?, ?, ?, ?, ?)"
@@ -47,9 +48,9 @@ pub async fn save_column_mapping_impl(
     .await
     .map_err(|e| {
         if e.to_string().contains("UNIQUE constraint failed") {
-            format!("A mapping with the name '{}' already exists", mapping.source_name)
+            CsvImportError::DuplicateMapping(mapping.source_name.clone())
         } else {
-            e.to_string()
+            CsvImportError::Database(e.to_string())
         }
     })?;
 
@@ -61,26 +62,33 @@ pub async fn import_csv_impl(
     account_id: i64,
     csv_content: String,
     mapping: ColumnMapping,
-) -> Result<ImportResult, String> {
+) -> Result<ImportResult, CsvImportError> {
     // Check rate limit FIRST (before expensive operations)
     // This ensures rate limiting cannot be bypassed by calling _impl directly
-    CSV_RATE_LIMITER.check_and_update()?;
+    CSV_RATE_LIMITER.check_and_update()
+        .map_err(|e| {
+            // Parse the rate limit message to extract seconds
+            let secs = e.split_whitespace()
+                .find_map(|s| s.parse::<f64>().ok())
+                .unwrap_or(2.0);
+            CsvImportError::RateLimitExceeded(secs)
+        })?;
 
     // Validate file size
     if csv_content.len() > MAX_CSV_FILE_SIZE {
-        return Err(format!(
-            "File too large. Maximum size is {} MB.",
-            MAX_CSV_FILE_SIZE / (1024 * 1024)
-        ));
+        return Err(CsvImportError::FileTooLarge {
+            size: csv_content.len(),
+            max: MAX_CSV_FILE_SIZE,
+        });
     }
 
     // Validate row count (approximate by counting newlines)
     let row_count = csv_content.lines().count();
     if row_count > MAX_CSV_ROWS {
-        return Err(format!(
-            "Too many rows. Maximum is {} rows, found approximately {}.",
-            MAX_CSV_ROWS, row_count
-        ));
+        return Err(CsvImportError::TooManyRows {
+            count: row_count,
+            max: MAX_CSV_ROWS,
+        });
     }
 
     match TransactionImporter::import(db, account_id, &csv_content, &mapping).await {
@@ -95,10 +103,7 @@ pub async fn import_csv_impl(
                 stats.imported, stats.total, stats.duplicates, stats.errors
             ),
         }),
-        Err(e) => {
-            eprintln!("CSV import error: {}", e);  // Log detailed error
-            Err("Failed to import CSV file. Please check the file format.".to_string())  // Return safe message
-        }
+        Err(e) => Err(CsvImportError::Database(e.to_string())),
     }
 }
 
@@ -108,15 +113,14 @@ pub async fn import_csv_impl(
 pub async fn get_csv_headers(csv_content: String) -> Result<Vec<String>, String> {
     // Validate file size
     if csv_content.len() > MAX_CSV_FILE_SIZE {
-        return Err(format!(
-            "File too large. Maximum size is {} MB.",
-            MAX_CSV_FILE_SIZE / (1024 * 1024)
-        ));
+        return Err(CsvImportError::FileTooLarge {
+            size: csv_content.len(),
+            max: MAX_CSV_FILE_SIZE,
+        }.to_user_message());
     }
 
     CsvParser::get_headers(&csv_content).map_err(|e| {
-        eprintln!("CSV header parsing error: {}", e);
-        "Failed to parse CSV headers. Please check the file format.".to_string()
+        CsvImportError::ParseError(e.to_string()).to_user_message()
     })
 }
 
@@ -125,7 +129,9 @@ pub async fn save_column_mapping(
     db_pool: tauri::State<'_, DbPool>,
     mapping: NewColumnMapping,
 ) -> Result<i64, String> {
-    save_column_mapping_impl(&db_pool.0, mapping).await
+    save_column_mapping_impl(&db_pool.0, mapping)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
 #[tauri::command]
@@ -136,5 +142,7 @@ pub async fn import_csv(
     mapping: ColumnMapping,
 ) -> Result<ImportResult, String> {
     // Rate limiting is enforced in import_csv_impl to prevent bypass
-    import_csv_impl(&db_pool.0, account_id, csv_content, mapping).await
+    import_csv_impl(&db_pool.0, account_id, csv_content, mapping)
+        .await
+        .map_err(|e| e.to_user_message())
 }

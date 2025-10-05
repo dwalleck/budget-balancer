@@ -11,12 +11,24 @@ pub mod utils;
 
 use sqlx::SqlitePool;
 use tauri::Manager;
+use tracing_subscriber::prelude::*;
 
 // Managed state for database pool
 pub struct DbPool(pub SqlitePool);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize tracing subscriber for structured logging
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "budget_balancer=info,warn".into())
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Starting Budget Balancer application");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -26,12 +38,13 @@ pub fn run() {
             tauri::async_runtime::block_on(async {
                 match initialize_database().await {
                     Ok(pool) => {
+                        tracing::info!("Database initialized successfully");
                         // Store pool in managed state
                         app.manage(DbPool(pool));
                         Ok(())
                     }
                     Err(e) => {
-                        eprintln!("Failed to initialize database: {}", e);
+                        tracing::error!(error = %e, "Failed to initialize database");
                         Err(e.into())
                     }
                 }

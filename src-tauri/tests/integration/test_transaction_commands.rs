@@ -272,3 +272,38 @@ async fn test_count_transactions_with_filter() {
     // Count for new account should be 0 (no transactions yet)
     assert_eq!(count, 0, "New account should have 0 transactions");
 }
+
+// Edge case tests added in Week 3
+#[tokio::test]
+async fn test_list_transactions_zero_limit() {
+    let db = super::get_test_db_pool().await;
+
+    let filter = TransactionFilter {
+        account_id: None,
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        limit: Some(0),
+        offset: None,
+    };
+
+    let result = list_transactions_impl(db, Some(filter)).await;
+    assert!(result.is_ok(), "Zero limit should use default limit");
+}
+
+#[tokio::test]
+async fn test_list_transactions_combined_filters() {
+    let db = super::get_test_db_pool().await;
+
+    let filter = TransactionFilter {
+        account_id: Some(1),
+        category_id: Some(1),
+        start_date: Some("2025-01-01".to_string()),
+        end_date: Some("2025-12-31".to_string()),
+        limit: Some(10),
+        offset: Some(0),
+    };
+
+    let result = list_transactions_impl(db, Some(filter)).await;
+    assert!(result.is_ok(), "Combined filters should work");
+}

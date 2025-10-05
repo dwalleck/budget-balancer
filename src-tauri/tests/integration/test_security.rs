@@ -16,7 +16,8 @@ async fn test_csv_file_size_limit_enforced() {
     let result = get_csv_headers(huge_csv).await;
 
     assert!(result.is_err(), "Should reject file larger than 10MB");
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("too large") || error_msg.contains("Too large"),
         "Error should mention file size"
@@ -89,7 +90,8 @@ async fn test_csv_row_count_limit_enforced() {
     let result = import_csv_impl(db, account_id, huge_csv, mapping).await;
 
     assert!(result.is_err(), "Should reject CSV with more than 10,000 rows");
-    let error_msg = result.unwrap_err();
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
     assert!(
         error_msg.contains("Too many rows") || error_msg.contains("too many"),
         "Error should mention row limit, got: {}",
@@ -133,7 +135,8 @@ async fn test_csv_import_rate_limiting() {
     // At least one should work, and if both are called quickly, second might be rate limited
     // This test verifies the rate limiter is in place, even if timing makes it non-deterministic
     if result1.is_ok() && result2.is_err() {
-        let error_msg = result2.unwrap_err();
+        let error = result2.unwrap_err();
+        let error_msg = error.to_string();
         assert!(
             error_msg.contains("Rate limit") || error_msg.contains("wait"),
             "Rate limit error should mention rate limiting"
@@ -240,7 +243,8 @@ async fn test_errors_dont_expose_database_paths() {
     let result = list_transactions_impl(db, Some(filter)).await;
 
     if result.is_err() {
-        let error_msg = result.unwrap_err();
+        let error = result.unwrap_err();
+    let error_msg = error.to_string();
 
         // Should NOT contain sensitive information
         assert!(
@@ -291,7 +295,8 @@ async fn test_csv_error_messages_are_safe() {
     let result = import_csv_impl(db, account_id, invalid_csv.to_string(), mapping).await;
 
     if result.is_err() {
-        let error_msg = result.unwrap_err();
+        let error = result.unwrap_err();
+    let error_msg = error.to_string();
 
         // Should be a generic, user-friendly message
         assert!(
@@ -332,4 +337,43 @@ async fn test_page_size_limit_enforced() {
         transactions.len() <= 100,
         "Should enforce max page size of 100"
     );
+}
+
+// Additional error sanitization tests added in Week 3
+#[tokio::test]
+async fn test_debt_error_messages_sanitized() {
+    use budget_balancer_lib::commands::debt_commands::update_debt_impl;
+
+    let db = super::get_test_db_pool().await;
+
+    let result = update_debt_impl(db, 99999, Some(-100.0), None, None).await;
+    assert!(result.is_err());
+
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
+
+    // Should not contain internal details
+    assert!(!error_msg.contains("src/"));
+    assert!(!error_msg.contains("unwrap"));
+}
+
+#[tokio::test]
+async fn test_csv_error_user_friendly() {
+    let db = super::get_test_db_pool().await;
+
+    let huge_file = "x".repeat(11 * 1024 * 1024);
+    let mapping = ColumnMapping {
+        date: "Date".to_string(),
+        amount: "Amount".to_string(),
+        description: "Description".to_string(),
+        merchant: Some("Merchant".to_string()),
+    };
+
+    let result = import_csv_impl(db, 1, huge_file, mapping).await;
+    assert!(result.is_err());
+
+    let error = result.unwrap_err();
+    let error_msg = error.to_user_message();
+
+    assert!(error_msg.contains("large") || error_msg.contains("size"));
 }

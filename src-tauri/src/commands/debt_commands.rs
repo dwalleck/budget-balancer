@@ -1,4 +1,5 @@
-use crate::errors::sanitize_db_error;
+use crate::constants::{MAX_INTEREST_RATE, MIN_INTEREST_RATE};
+use crate::errors::DebtError;
 use crate::models::debt::{Debt, DebtPayment, NewDebt};
 use crate::services::avalanche_calculator::AvalancheCalculator;
 use crate::services::snowball_calculator::SnowballCalculator;
@@ -83,13 +84,20 @@ pub struct CompareStrategiesResponse {
 
 // Business logic functions (used by both commands and tests)
 
-pub async fn create_debt_impl(db: &SqlitePool, debt: NewDebt) -> Result<i64, String> {
+pub async fn create_debt_impl(db: &SqlitePool, debt: NewDebt) -> Result<i64, DebtError> {
     // Validate inputs
-    if debt.balance < 0.0 || debt.min_payment < 0.0 {
-        return Err("InvalidAmount: balance and min_payment must be non-negative".to_string());
+    if debt.balance < 0.0 {
+        return Err(DebtError::InvalidBalance(debt.balance));
     }
-    if debt.interest_rate < 0.0 || debt.interest_rate > 100.0 {
-        return Err("InvalidRate: interest_rate must be between 0 and 100".to_string());
+    if debt.min_payment < 0.0 {
+        return Err(DebtError::InvalidMinPayment(debt.min_payment));
+    }
+    if debt.interest_rate < MIN_INTEREST_RATE || debt.interest_rate > MAX_INTEREST_RATE {
+        return Err(DebtError::InvalidInterestRate {
+            min: MIN_INTEREST_RATE,
+            max: MAX_INTEREST_RATE,
+            actual: debt.interest_rate,
+        });
     }
 
     let result = sqlx::query(
@@ -102,7 +110,7 @@ pub async fn create_debt_impl(db: &SqlitePool, debt: NewDebt) -> Result<i64, Str
     .bind(debt.min_payment)
     .execute(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "create debt"))?;
+    .map_err(|e| DebtError::Database(e.to_string()))?;
 
     Ok(result.last_insert_rowid())
 }
@@ -110,23 +118,27 @@ pub async fn create_debt_impl(db: &SqlitePool, debt: NewDebt) -> Result<i64, Str
 // T030: Create debt command
 #[tauri::command]
 pub async fn create_debt(db_pool: tauri::State<'_, DbPool>, debt: NewDebt) -> Result<i64, String> {
-    create_debt_impl(&db_pool.0, debt).await
+    create_debt_impl(&db_pool.0, debt)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
-pub async fn list_debts_impl(db: &SqlitePool) -> Result<Vec<Debt>, String> {
+pub async fn list_debts_impl(db: &SqlitePool) -> Result<Vec<Debt>, DebtError> {
     sqlx::query_as::<_, Debt>(
         "SELECT id, name, balance, original_balance, interest_rate, min_payment, created_at, updated_at
          FROM debts ORDER BY balance DESC"
     )
     .fetch_all(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debts"))
+    .map_err(|e| DebtError::Database(e.to_string()))
 }
 
 // T031: List debts command
 #[tauri::command]
 pub async fn list_debts(db_pool: tauri::State<'_, DbPool>) -> Result<Vec<Debt>, String> {
-    list_debts_impl(&db_pool.0).await
+    list_debts_impl(&db_pool.0)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
 pub async fn update_debt_impl(
@@ -135,21 +147,25 @@ pub async fn update_debt_impl(
     balance: Option<f64>,
     interest_rate: Option<f64>,
     min_payment: Option<f64>,
-) -> Result<bool, String> {
+) -> Result<bool, DebtError> {
     // Validate inputs
     if let Some(bal) = balance {
         if bal < 0.0 {
-            return Err("InvalidAmount: balance must be non-negative".to_string());
+            return Err(DebtError::InvalidBalance(bal));
         }
     }
     if let Some(rate) = interest_rate {
-        if rate < 0.0 || rate > 100.0 {
-            return Err("InvalidRate: interest_rate must be between 0 and 100".to_string());
+        if rate < MIN_INTEREST_RATE || rate > MAX_INTEREST_RATE {
+            return Err(DebtError::InvalidInterestRate {
+                min: MIN_INTEREST_RATE,
+                max: MAX_INTEREST_RATE,
+                actual: rate,
+            });
         }
     }
     if let Some(payment) = min_payment {
         if payment < 0.0 {
-            return Err("InvalidAmount: min_payment must be non-negative".to_string());
+            return Err(DebtError::InvalidMinPayment(payment));
         }
     }
 
@@ -158,10 +174,10 @@ pub async fn update_debt_impl(
         .bind(debt_id)
         .fetch_optional(db)
         .await
-        .map_err(|e| sanitize_db_error(e, "check debt existence"))?;
+        .map_err(|e| DebtError::Database(e.to_string()))?;
 
     if exists.is_none() {
-        return Err("DebtNotFound: debt not found".to_string());
+        return Err(DebtError::NotFound(debt_id));
     }
 
     // Build update query dynamically
@@ -194,7 +210,7 @@ pub async fn update_debt_impl(
     }
     q = q.bind(debt_id);
 
-    q.execute(db).await.map_err(|e| sanitize_db_error(e, "update debt"))?;
+    q.execute(db).await.map_err(|e| DebtError::Database(e.to_string()))?;
 
     Ok(true)
 }
@@ -208,30 +224,32 @@ pub async fn update_debt(
     interest_rate: Option<f64>,
     min_payment: Option<f64>,
 ) -> Result<bool, String> {
-    update_debt_impl(&db_pool.0, debt_id, balance, interest_rate, min_payment).await
+    update_debt_impl(&db_pool.0, debt_id, balance, interest_rate, min_payment)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
 pub async fn calculate_payoff_plan_impl(
     db: &SqlitePool,
     strategy: String,
     monthly_amount: f64,
-) -> Result<PayoffPlanResponse, String> {
+) -> Result<PayoffPlanResponse, DebtError> {
     let debts = sqlx::query_as::<_, Debt>(
         "SELECT id, name, balance, original_balance, interest_rate, min_payment, created_at, updated_at
          FROM debts WHERE balance > 0 ORDER BY balance DESC"
     )
     .fetch_all(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debts for payoff calculation"))?;
+    .map_err(|e| DebtError::Database(e.to_string()))?;
 
     if debts.is_empty() {
-        return Err("NoDebts: no debts in database".to_string());
+        return Err(DebtError::NoDebts);
     }
 
     let plan = match strategy.as_str() {
         "avalanche" => AvalancheCalculator::calculate_payoff_plan(debts, monthly_amount)?,
         "snowball" => SnowballCalculator::calculate_payoff_plan(debts, monthly_amount)?,
-        _ => return Err("Invalid strategy: must be 'avalanche' or 'snowball'".to_string()),
+        _ => return Err(DebtError::InvalidStrategy(strategy)),
     };
 
     // Save the plan
@@ -242,7 +260,7 @@ pub async fn calculate_payoff_plan_impl(
     .bind(monthly_amount)
     .execute(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "save debt payoff plan"))?;
+    .map_err(|e| DebtError::Database(e.to_string()))?;
 
     let plan_id = result.last_insert_rowid();
 
@@ -278,10 +296,12 @@ pub async fn calculate_payoff_plan(
     strategy: String,
     monthly_amount: f64,
 ) -> Result<PayoffPlanResponse, String> {
-    calculate_payoff_plan_impl(&db_pool.0, strategy, monthly_amount).await
+    calculate_payoff_plan_impl(&db_pool.0, strategy, monthly_amount)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
-pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<PayoffPlanResponse, String> {
+pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<PayoffPlanResponse, DebtError> {
     #[derive(sqlx::FromRow)]
     struct DebtPlan {
         strategy: String,
@@ -294,8 +314,8 @@ pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<Payof
     .bind(plan_id)
     .fetch_optional(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debt payoff plan"))?
-    .ok_or_else(|| "PlanNotFound: plan not found".to_string())?;
+    .map_err(|e| DebtError::Database(e.to_string()))?
+    .ok_or_else(|| DebtError::PlanNotFound(plan_id))?;
 
     // Recalculate the plan (plans are not fully stored, just metadata)
     let debts = sqlx::query_as::<_, Debt>(
@@ -304,12 +324,12 @@ pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<Payof
     )
     .fetch_all(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debts for plan recalculation"))?;
+    .map_err(|e| DebtError::Database(e.to_string()))?;
 
     let calc_plan = match plan.strategy.as_str() {
         "avalanche" => AvalancheCalculator::calculate_payoff_plan(debts, plan.monthly_amount)?,
         "snowball" => SnowballCalculator::calculate_payoff_plan(debts, plan.monthly_amount)?,
-        _ => return Err("Invalid strategy in stored plan".to_string()),
+        _ => return Err(DebtError::InvalidStrategy(plan.strategy)),
     };
 
     Ok(PayoffPlanResponse {
@@ -340,7 +360,9 @@ pub async fn get_payoff_plan_impl(db: &SqlitePool, plan_id: i64) -> Result<Payof
 // T034: Get payoff plan command
 #[tauri::command]
 pub async fn get_payoff_plan(db_pool: tauri::State<'_, DbPool>, plan_id: i64) -> Result<PayoffPlanResponse, String> {
-    get_payoff_plan_impl(&db_pool.0, plan_id).await
+    get_payoff_plan_impl(&db_pool.0, plan_id)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
 pub async fn record_debt_payment_impl(
@@ -349,13 +371,13 @@ pub async fn record_debt_payment_impl(
     amount: f64,
     date: String,
     plan_id: Option<i64>,
-) -> Result<RecordPaymentResponse, String> {
+) -> Result<RecordPaymentResponse, DebtError> {
     if amount <= 0.0 {
-        return Err("InvalidAmount: amount must be positive".to_string());
+        return Err(DebtError::InvalidPaymentAmount(amount));
     }
 
     // Use a transaction to ensure atomicity
-    let mut tx = db.begin().await.map_err(|e| sanitize_db_error(e, "begin transaction"))?;
+    let mut tx = db.begin().await.map_err(|e| DebtError::Database(e.to_string()))?;
 
     // Get current debt
     let debt = sqlx::query_as::<_, Debt>(
@@ -365,11 +387,14 @@ pub async fn record_debt_payment_impl(
     .bind(debt_id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debt for payment"))?
-    .ok_or_else(|| "DebtNotFound: debt not found".to_string())?;
+    .map_err(|e| DebtError::Database(e.to_string()))?
+    .ok_or_else(|| DebtError::NotFound(debt_id))?;
 
     if amount > debt.balance {
-        return Err("InvalidAmount: payment exceeds debt balance".to_string());
+        return Err(DebtError::PaymentExceedsBalance {
+            payment: amount,
+            balance: debt.balance,
+        });
     }
 
     // Record payment
@@ -382,7 +407,7 @@ pub async fn record_debt_payment_impl(
     .bind(plan_id)
     .execute(&mut *tx)
     .await
-    .map_err(|e| sanitize_db_error(e, "record debt payment"))?;
+    .map_err(|e| DebtError::Database(e.to_string()))?;
 
     let payment_id = payment_result.last_insert_rowid();
 
@@ -393,10 +418,10 @@ pub async fn record_debt_payment_impl(
         .bind(debt_id)
         .execute(&mut *tx)
         .await
-        .map_err(|e| sanitize_db_error(e, "update debt balance after payment"))?;
+        .map_err(|e| DebtError::Database(e.to_string()))?;
 
     // Commit transaction
-    tx.commit().await.map_err(|e| sanitize_db_error(e, "commit payment transaction"))?;
+    tx.commit().await.map_err(|e| DebtError::Database(e.to_string()))?;
 
     Ok(RecordPaymentResponse {
         payment_id,
@@ -413,7 +438,9 @@ pub async fn record_debt_payment(
     date: String,
     plan_id: Option<i64>,
 ) -> Result<RecordPaymentResponse, String> {
-    record_debt_payment_impl(&db_pool.0, debt_id, amount, date, plan_id).await
+    record_debt_payment_impl(&db_pool.0, debt_id, amount, date, plan_id)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
 pub async fn get_debt_progress_impl(
@@ -421,7 +448,7 @@ pub async fn get_debt_progress_impl(
     debt_id: i64,
     start_date: Option<String>,
     end_date: Option<String>,
-) -> Result<DebtProgressResponse, String> {
+) -> Result<DebtProgressResponse, DebtError> {
     let debt = sqlx::query_as::<_, Debt>(
         "SELECT id, name, balance, original_balance, interest_rate, min_payment, created_at, updated_at
          FROM debts WHERE id = ?"
@@ -429,8 +456,8 @@ pub async fn get_debt_progress_impl(
     .bind(debt_id)
     .fetch_optional(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debt for progress"))?
-    .ok_or_else(|| "DebtNotFound: debt not found".to_string())?;
+    .map_err(|e| DebtError::Database(e.to_string()))?
+    .ok_or_else(|| DebtError::NotFound(debt_id))?;
 
     let payments = if let (Some(start), Some(end)) = (start_date, end_date) {
         sqlx::query_as::<_, DebtPayment>(
@@ -444,7 +471,7 @@ pub async fn get_debt_progress_impl(
         .bind(end)
         .fetch_all(db)
         .await
-        .map_err(|e| sanitize_db_error(e, "load debt payment history"))?
+        .map_err(|e| DebtError::Database(e.to_string()))?
     } else {
         sqlx::query_as::<_, DebtPayment>(
             "SELECT id, debt_id, amount, date, plan_id, created_at
@@ -455,7 +482,7 @@ pub async fn get_debt_progress_impl(
         .bind(debt_id)
         .fetch_all(db)
         .await
-        .map_err(|e| sanitize_db_error(e, "load debt payment history"))?
+        .map_err(|e| DebtError::Database(e.to_string()))?
     };
 
     let total_paid: f64 = payments.iter().map(|p| p.amount).sum();
@@ -488,20 +515,22 @@ pub async fn get_debt_progress(
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<DebtProgressResponse, String> {
-    get_debt_progress_impl(&db_pool.0, debt_id, start_date, end_date).await
+    get_debt_progress_impl(&db_pool.0, debt_id, start_date, end_date)
+        .await
+        .map_err(|e| e.to_user_message())
 }
 
-pub async fn compare_strategies_impl(db: &SqlitePool, monthly_amount: f64) -> Result<CompareStrategiesResponse, String> {
+pub async fn compare_strategies_impl(db: &SqlitePool, monthly_amount: f64) -> Result<CompareStrategiesResponse, DebtError> {
     let debts = sqlx::query_as::<_, Debt>(
         "SELECT id, name, balance, original_balance, interest_rate, min_payment, created_at, updated_at
          FROM debts WHERE balance > 0"
     )
     .fetch_all(db)
     .await
-    .map_err(|e| sanitize_db_error(e, "load debts for strategy comparison"))?;
+    .map_err(|e| DebtError::Database(e.to_string()))?;
 
     if debts.is_empty() {
-        return Err("NoDebts: no debts in database".to_string());
+        return Err(DebtError::NoDebts);
     }
 
     let avalanche_plan = AvalancheCalculator::calculate_payoff_plan(debts.clone(), monthly_amount)?;
@@ -533,5 +562,7 @@ pub async fn compare_strategies_impl(db: &SqlitePool, monthly_amount: f64) -> Re
 // T037: Compare strategies command
 #[tauri::command]
 pub async fn compare_strategies(db_pool: tauri::State<'_, DbPool>, monthly_amount: f64) -> Result<CompareStrategiesResponse, String> {
-    compare_strategies_impl(&db_pool.0, monthly_amount).await
+    compare_strategies_impl(&db_pool.0, monthly_amount)
+        .await
+        .map_err(|e| e.to_user_message())
 }

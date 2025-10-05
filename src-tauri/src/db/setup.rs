@@ -96,32 +96,33 @@ pub async fn initialize_database(pool: &SqlitePool) -> Result<(), String> {
     .map_err(|e| format!("Failed to insert default categories: {}", e))?;
 
     // Insert category rules for auto-categorization
+    const DEFAULT_RULE_PRIORITY: i64 = 10;
     let rules = vec![
         // Groceries
-        ("walmart", 1, 10),
-        ("target", 1, 10),
-        ("whole foods", 1, 10),
-        ("trader joe", 1, 10),
-        ("safeway", 1, 10),
-        ("kroger", 1, 10),
+        ("walmart", 1, DEFAULT_RULE_PRIORITY),
+        ("target", 1, DEFAULT_RULE_PRIORITY),
+        ("whole foods", 1, DEFAULT_RULE_PRIORITY),
+        ("trader joe", 1, DEFAULT_RULE_PRIORITY),
+        ("safeway", 1, DEFAULT_RULE_PRIORITY),
+        ("kroger", 1, DEFAULT_RULE_PRIORITY),
         // Dining
-        ("starbucks", 2, 10),
-        ("mcdonalds", 2, 10),
-        ("chipotle", 2, 10),
-        ("restaurant", 2, 10),
-        ("cafe", 2, 10),
+        ("starbucks", 2, DEFAULT_RULE_PRIORITY),
+        ("mcdonalds", 2, DEFAULT_RULE_PRIORITY),
+        ("chipotle", 2, DEFAULT_RULE_PRIORITY),
+        ("restaurant", 2, DEFAULT_RULE_PRIORITY),
+        ("cafe", 2, DEFAULT_RULE_PRIORITY),
         // Transportation
-        ("uber", 3, 10),
-        ("lyft", 3, 10),
-        ("shell", 3, 10),
-        ("gas station", 3, 10),
+        ("uber", 3, DEFAULT_RULE_PRIORITY),
+        ("lyft", 3, DEFAULT_RULE_PRIORITY),
+        ("shell", 3, DEFAULT_RULE_PRIORITY),
+        ("gas station", 3, DEFAULT_RULE_PRIORITY),
         // Entertainment
-        ("netflix", 4, 10),
-        ("spotify", 4, 10),
-        ("movie", 4, 10),
+        ("netflix", 4, DEFAULT_RULE_PRIORITY),
+        ("spotify", 4, DEFAULT_RULE_PRIORITY),
+        ("movie", 4, DEFAULT_RULE_PRIORITY),
         // Shopping
-        ("amazon", 7, 10),
-        ("ebay", 7, 10),
+        ("amazon", 7, DEFAULT_RULE_PRIORITY),
+        ("ebay", 7, DEFAULT_RULE_PRIORITY),
     ];
 
     for (pattern, category_id, priority) in rules {

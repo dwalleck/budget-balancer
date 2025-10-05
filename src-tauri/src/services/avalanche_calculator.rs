@@ -1,3 +1,5 @@
+use crate::constants::{MAX_PAYOFF_YEARS, MONTHS_PER_YEAR, PERCENT_TO_DECIMAL_DIVISOR};
+use crate::errors::DebtError;
 use crate::models::debt::Debt;
 use serde::{Deserialize, Serialize};
 
@@ -48,18 +50,18 @@ struct DebtState {
 pub struct AvalancheCalculator;
 
 impl AvalancheCalculator {
-    pub fn calculate_payoff_plan(debts: Vec<Debt>, monthly_amount: f64) -> Result<PayoffPlan, String> {
+    pub fn calculate_payoff_plan(debts: Vec<Debt>, monthly_amount: f64) -> Result<PayoffPlan, DebtError> {
         if debts.is_empty() {
-            return Err("No debts provided".to_string());
+            return Err(DebtError::NoDebts);
         }
 
         // Validate monthly amount covers minimum payments
         let total_min_payments: f64 = debts.iter().map(|d| d.min_payment).sum();
         if monthly_amount < total_min_payments {
-            return Err(format!(
-                "Insufficient funds: monthly amount ${:.2} is less than total minimum payments ${:.2}",
-                monthly_amount, total_min_payments
-            ));
+            return Err(DebtError::InsufficientFunds {
+                monthly: monthly_amount,
+                min_payments: total_min_payments,
+            });
         }
 
         // Initialize debt states sorted by interest rate (highest first - avalanche strategy)
@@ -89,7 +91,7 @@ impl AvalancheCalculator {
             // Apply interest to all debts
             for debt in &mut debt_states {
                 if debt.balance > 0.01 {
-                    let monthly_interest = debt.balance * (debt.interest_rate / 100.0 / 12.0);
+                    let monthly_interest = debt.balance * (debt.interest_rate / PERCENT_TO_DECIMAL_DIVISOR / MONTHS_PER_YEAR);
                     debt.balance += monthly_interest;
                     debt.total_interest_paid += monthly_interest;
                 }
@@ -153,8 +155,8 @@ impl AvalancheCalculator {
             month += 1;
 
             // Safety check: prevent infinite loops
-            if month > 1200 {
-                return Err("Payoff calculation exceeded 100 years - check debt parameters".to_string());
+            if month > (MAX_PAYOFF_YEARS * MONTHS_PER_YEAR as i32) {
+                return Err(DebtError::PayoffExceeded(MAX_PAYOFF_YEARS));
             }
         }
 
@@ -247,6 +249,8 @@ mod tests {
 
         let result = AvalancheCalculator::calculate_payoff_plan(debts, 25.0);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Insufficient funds"));
+        let error = result.unwrap_err();
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("Insufficient funds"));
     }
 }

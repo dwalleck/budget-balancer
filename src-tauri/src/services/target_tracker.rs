@@ -1,3 +1,4 @@
+use crate::constants::{PERCENT_TO_DECIMAL_DIVISOR, SPENDING_ON_TRACK_THRESHOLD_PERCENT, SPENDING_UNDER_THRESHOLD_PERCENT};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
@@ -72,7 +73,7 @@ impl TargetTracker {
 
             let remaining = target_amount - actual_amount;
             let percentage_used = if target_amount > 0.0 {
-                (actual_amount / target_amount) * 100.0
+                (actual_amount / target_amount) * PERCENT_TO_DECIMAL_DIVISOR
             } else {
                 0.0
             };
@@ -80,10 +81,10 @@ impl TargetTracker {
 
             // Determine status
             // under: < 80%, on_track: 80-100%, over: > 100%
-            let status = if percentage_used < 80.0 {
+            let status = if percentage_used < SPENDING_UNDER_THRESHOLD_PERCENT {
                 under_count += 1;
                 "under".to_string()
-            } else if percentage_used <= 100.0 {
+            } else if percentage_used <= SPENDING_ON_TRACK_THRESHOLD_PERCENT {
                 on_track_count += 1;
                 "on_track".to_string()
             } else {

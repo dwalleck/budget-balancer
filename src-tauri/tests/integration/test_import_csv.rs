@@ -181,3 +181,34 @@ async fn test_import_csv_with_categorization() {
         "Should process all 2 transactions (imported + duplicates)"
     );
 }
+
+#[tokio::test]
+async fn test_import_csv_transaction_amount_exceeds_max() {
+    let db = super::get_test_db_pool().await;
+    let account = NewAccount {
+        name: super::unique_name("Max Amount Test"),
+        account_type: budget_balancer_lib::models::account::AccountType::Checking,
+        initial_balance: 0.0,
+    };
+    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+
+    // Transaction amount exceeds MAX_TRANSACTION_AMOUNT (1 billion)
+    let csv_content = "Date,Amount,Description\n2024-01-01,2000000000.00,Huge Transaction";
+
+    let mapping = ColumnMapping {
+        date: "Date".to_string(),
+        amount: "Amount".to_string(),
+        description: "Description".to_string(),
+        merchant: None,
+    };
+
+    let result = import_csv_impl(db, account_id, csv_content.to_string(), mapping).await;
+    assert!(result.is_err(), "Should reject transaction exceeding maximum amount");
+    let error = result.unwrap_err();
+    let error_msg = error.to_string().to_lowercase();
+    assert!(
+        error_msg.contains("amount") && error_msg.contains("exceeds"),
+        "Error should mention amount exceeds maximum: {}",
+        error_msg
+    );
+}
