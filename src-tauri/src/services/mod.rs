@@ -1,0 +1,11 @@
+pub mod csv_parser;
+pub mod duplicate_detector;
+pub mod categorizer;
+pub mod transaction_importer;
+pub mod avalanche_calculator;
+pub mod snowball_calculator;
+pub mod payment_scheduler;
+pub mod interest_calculator;
+pub mod spending_aggregator;
+pub mod trends_calculator;
+pub mod target_tracker;

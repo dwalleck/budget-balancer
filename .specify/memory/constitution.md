@@ -1,50 +1,85 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+Version: 0.0.0 → 1.0.0
+Rationale: Initial constitution creation - MAJOR version for new governance framework
+Modified Principles: N/A (initial version)
+Added Sections:
+  - Core Principles (Development Philosophy, Substance Over Flash, Test-Driven Development)
+  - Development Standards (Code Quality, Testing Hierarchy, Documentation)
+  - Governance (Amendment Process, Compliance, Enforcement)
+Removed Sections: N/A
+Templates Status:
+  ✅ .specify/templates/plan-template.md - Updated Constitution Check section with TDD, Development Philosophy, and Substance Over Flash gates; updated version reference to 1.0.0
+  ✅ .specify/templates/spec-template.md - Added testability reminders to Acceptance Scenarios and Edge Cases; added TDD compliance checkpoint to requirements checklist
+  ✅ .specify/templates/tasks-template.md - Already enforces TDD workflow with "Tests First" phase; no changes needed
+Follow-up TODOs: None
+-->
+
+# Budget Balancer Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Development Philosophy
+Applications MUST be easy to develop, test, and maintain. Code maintainability and developer experience are non-negotiable priorities. Every design decision MUST consider long-term maintenance costs and developer onboarding time.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+**Rationale**: Sustainable software development requires code that can be understood, modified, and extended efficiently. Poor maintainability compounds technical debt exponentially over time.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Substance Over Flash
+User experience and application functionality MUST take priority over visual impressions. The system MUST prioritize how users feel about the application's functionality and usability rather than superficial UI aesthetics.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+**Rationale**: Long-term user satisfaction derives from reliable, intuitive functionality. Users value applications that work well over applications that merely look impressive but fail to deliver on core needs.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Test-Driven Development (NON-NEGOTIABLE)
+Tests MUST always be written alongside the feature being developed. For any feature to be deployed without tests, explicit leadership signoff is required. Testability is a top priority in all architectural and implementation decisions.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Requirements**:
+- Every feature MUST have corresponding automated tests
+- Tests MUST be written before or during feature development (TDD/test-first approach preferred)
+- Contract tests MUST be written for all API interfaces
+- Integration tests MUST be written for user scenarios
+- Untested code requires documented leadership exception
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+**Rationale**: Testing is not optional or deferred work—it is core to delivering reliable software. Test-first development catches defects early, ensures requirements are testable, and serves as living documentation.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Development Standards
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### Code Quality
+- All code MUST pass linting and formatting standards
+- Code reviews MUST verify test coverage
+- Complexity MUST be justified and documented
+- Refactoring MUST maintain or improve test coverage
+
+### Testing Hierarchy
+1. **Contract Tests**: Verify API interfaces and data contracts
+2. **Integration Tests**: Validate user scenarios and workflows
+3. **Unit Tests**: Test individual components and business logic
+4. **Performance Tests**: Ensure acceptable response times and resource usage
+
+### Documentation
+- Public APIs MUST have usage documentation
+- Complex algorithms MUST have explanatory comments
+- Architecture decisions MUST be documented with rationale
+- Quickstart guides MUST be maintained for new features
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Amendment Process
+Constitution amendments require:
+1. Documented proposal with rationale
+2. Leadership review and approval
+3. Update to version number (semantic versioning)
+4. Propagation to all dependent templates and documentation
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+### Compliance
+- All pull requests MUST verify constitutional compliance
+- Design reviews MUST reference constitution principles
+- Exceptions MUST be documented with justification
+- Regular audits MUST verify adherence to testing requirements
+
+### Enforcement
+- Test coverage gates MUST block deployment of untested code
+- Code review checklist MUST include constitution verification
+- Automated checks MUST enforce formatting and linting standards
+- Leadership exceptions MUST be tracked and reviewed quarterly
+
+**Version**: 1.0.0 | **Ratified**: 2025-10-04 | **Last Amended**: 2025-10-04
