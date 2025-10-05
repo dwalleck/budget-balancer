@@ -504,6 +504,77 @@ let params = apply_transaction_filters(&mut query, &filter);
 
 ---
 
+#### 9d. Edge Case Test Coverage (CODE QUALITY)
+**Issue**: Missing tests for edge cases and error conditions in pagination and error handling
+
+**Source**: PR #4 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/4#issuecomment-3368699208)
+
+**Current State**:
+- Basic pagination tests cover happy path (default limit, max limit enforcement)
+- Missing edge case coverage for boundary conditions
+- Error sanitization not explicitly tested
+- Combined filter scenarios not tested
+
+**Suggested Tests to Add**:
+
+1. **Pagination Edge Cases**:
+   - `test_pagination_with_zero_limit` - Should use default (50) when limit=0
+   - `test_pagination_with_negative_offset` - Should handle gracefully (use 0 or error)
+   - `test_pagination_with_negative_limit` - Should handle gracefully
+
+2. **Filter Combinations**:
+   - `test_count_with_all_filters_combined` - Test account_id + category_id + date range
+   - `test_list_with_all_filters_combined` - Verify all filters work together
+
+3. **Error Sanitization**:
+   - `test_error_messages_no_database_paths` - Verify no file paths exposed
+   - `test_error_messages_no_sql_exposed` - Verify no SQL queries in errors
+   - `test_invalid_account_id_returns_safe_error` - Generic error message
+
+**Example Test**:
+```rust
+#[tokio::test]
+async fn test_pagination_with_zero_limit() {
+    let filter = Some(TransactionFilter {
+        limit: Some(0), // Edge case: zero limit
+        offset: Some(0),
+        ..Default::default()
+    });
+
+    let result = list_transactions_impl(db, filter).await.unwrap();
+
+    // Should default to 50, not return 0 or all items
+    assert!(result.len() <= 50, "Zero limit should use default");
+}
+
+#[tokio::test]
+async fn test_error_messages_no_database_paths() {
+    let result = list_transactions_impl(db_with_error, None).await;
+
+    if let Err(msg) = result {
+        assert!(!msg.contains("/"), "Error should not contain file paths");
+        assert!(!msg.contains("database"), "Error should be generic");
+    }
+}
+```
+
+**Benefits**:
+- Better edge case coverage
+- Explicitly tests security requirements (no info disclosure)
+- Catches potential bugs in boundary conditions
+- Documents expected behavior for edge cases
+
+**Priority**: 🟢 LOW
+**Effort**: 1-2 hours
+**Target**: Week 3
+**Status**: Enhancement suggestion from PR #4 review
+
+**Files Affected**:
+- `src-tauri/tests/integration/test_transaction_commands.rs`
+- `src-tauri/tests/integration/test_security.rs`
+
+---
+
 ## Additional Enhancements (Nice to Have)
 
 ### 10. Database Backup/Export Functionality
@@ -568,6 +639,7 @@ let params = apply_transaction_filters(&mut query, &filter);
 - [ ] Refactor dynamic SQL query building pattern (#9a - from PR #3 review)
 - [ ] Implement structured logging framework (#9b - from PR #4 review)
 - [ ] Extract duplicate transaction filter logic (#9c - from PR #4 review)
+- [ ] Add edge case test coverage (#9d - from PR #4 review)
 
 **Success Criteria**:
 - No magic numbers in code
@@ -576,6 +648,7 @@ let params = apply_transaction_filters(&mut query, &filter);
 - SQL query building uses safer patterns (querybuilder or prepared statements)
 - Production-grade logging with tracing framework
 - Transaction filter logic shared between list and count operations
+- Edge cases tested (zero/negative limits, combined filters, error sanitization)
 
 ---
 
