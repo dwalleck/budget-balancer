@@ -47,7 +47,23 @@
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+### Test-Driven Development Compliance (NON-NEGOTIABLE)
+- [ ] All features have test specifications defined
+- [ ] Contract tests identified for all API interfaces
+- [ ] Integration tests planned for user scenarios
+- [ ] No untested code without leadership signoff documented
+
+### Development Philosophy Compliance
+- [ ] Design supports ease of development
+- [ ] Code maintainability considered in architecture
+- [ ] Developer experience prioritized
+
+### Substance Over Flash Compliance
+- [ ] User functionality prioritized over UI aesthetics
+- [ ] Feature design focuses on usability and reliability
+- [ ] User experience centered on application value
+
+**Violations**: [Document any constitutional violations with justification in Complexity Tracking section]
 
 ## Project Structure
 
@@ -216,4 +232,4 @@ directories captured above]
 - [ ] Complexity deviations documented
 
 ---
-*Based on Constitution v2.1.1 - See `/memory/constitution.md`*
+*Based on Constitution v1.0.0 - See `.specify/memory/constitution.md`*

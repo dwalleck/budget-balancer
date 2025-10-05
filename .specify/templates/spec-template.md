@@ -58,10 +58,12 @@ When creating this spec from a user prompt:
 [Describe the main user journey in plain language]
 
 ### Acceptance Scenarios
+*Each scenario MUST be testable and will map to integration tests*
 1. **Given** [initial state], **When** [action], **Then** [expected outcome]
 2. **Given** [initial state], **When** [action], **Then** [expected outcome]
 
 ### Edge Cases
+*Each edge case MUST have corresponding test coverage*
 - What happens when [boundary condition]?
 - How does system handle [error scenario]?
 
@@ -95,10 +97,11 @@ When creating this spec from a user prompt:
 
 ### Requirement Completeness
 - [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous  
+- [ ] Requirements are testable and unambiguous (TDD compliance)
 - [ ] Success criteria are measurable
 - [ ] Scope is clearly bounded
 - [ ] Dependencies and assumptions identified
+- [ ] All acceptance scenarios can be converted to automated tests
 
 ---
 
