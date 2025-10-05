@@ -124,6 +124,9 @@ pub enum TransactionError {
     #[error("Failed to categorize transaction")]
     CategorizationError,
 
+    #[error("Validation error: {0}")]
+    ValidationError(String),
+
     #[error("Database error: {0}")]
     Database(String),
 }
@@ -139,6 +142,7 @@ impl TransactionError {
             TransactionError::CategoryNotFound(_) => self.to_string(),
             TransactionError::AccountNotFound(_) => self.to_string(),
             TransactionError::CategorizationError => self.to_string(),
+            TransactionError::ValidationError(_) => self.to_string(),
 
             // Database errors should be sanitized
             TransactionError::Database(e) => {

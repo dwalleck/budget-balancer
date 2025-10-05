@@ -1,4 +1,7 @@
-use crate::constants::{DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use crate::constants::{
+    DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_BULK_OPERATION_IDS,
+    MAX_PAGE_SIZE, MAX_SEARCH_QUERY_LENGTH,
+};
 use crate::errors::TransactionError;
 use crate::models::transaction::Transaction;
 use crate::services::categorizer::Categorizer;
@@ -12,6 +15,7 @@ pub struct TransactionFilter {
     pub category_id: Option<i64>,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    pub search: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -24,6 +28,7 @@ struct TransactionFilterBuilder {
     category_id: Option<i64>,
     start_date: Option<String>,
     end_date: Option<String>,
+    search: Option<String>,
 }
 
 impl TransactionFilterBuilder {
@@ -42,6 +47,16 @@ impl TransactionFilterBuilder {
         if filter.end_date.is_some() {
             where_clauses.push(" AND date <= ?".to_string());
         }
+        if filter.search.is_some() {
+            where_clauses.push(" AND (LOWER(description) LIKE LOWER(?) ESCAPE '\\' OR LOWER(merchant) LIKE LOWER(?) ESCAPE '\\')".to_string());
+        }
+
+        // Format search pattern here to own it
+        // Escape LIKE wildcards (% and _) to prevent pattern injection
+        let search = filter.search.clone().map(|s| {
+            let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+            format!("%{}%", escaped)
+        });
 
         Self {
             where_clauses,
@@ -49,6 +64,7 @@ impl TransactionFilterBuilder {
             category_id: filter.category_id,
             start_date: filter.start_date.clone(),
             end_date: filter.end_date.clone(),
+            search,
         }
     }
 
@@ -75,6 +91,9 @@ impl TransactionFilterBuilder {
         if let Some(ref end_date) = self.end_date {
             query = query.bind(end_date);
         }
+        if let Some(ref search_pattern) = self.search {
+            query = query.bind(search_pattern).bind(search_pattern);
+        }
         query
     }
 }
@@ -90,6 +109,7 @@ pub async fn list_transactions_impl(
         category_id: None,
         start_date: None,
         end_date: None,
+        search: None,
         limit: Some(DEFAULT_PAGE_SIZE),
         offset: Some(DEFAULT_OFFSET),
     });
@@ -131,6 +151,7 @@ pub async fn count_transactions_impl(
         category_id: None,
         start_date: None,
         end_date: None,
+        search: None,
         limit: None,
         offset: None,
     });
@@ -348,6 +369,260 @@ pub async fn count_transactions(
     filter: Option<TransactionFilter>,
 ) -> Result<i64, String> {
     count_transactions_impl(&db_pool.0, filter)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Search transactions implementation
+pub async fn search_transactions_impl(
+    db: &SqlitePool,
+    query: String,
+    filter: Option<TransactionFilter>,
+) -> Result<Vec<Transaction>, TransactionError> {
+    // Validate query length
+    if query.len() > MAX_SEARCH_QUERY_LENGTH {
+        return Err(TransactionError::ValidationError(
+            format!("Search query too long (max {} characters)", MAX_SEARCH_QUERY_LENGTH)
+        ));
+    }
+
+    // Add search to filter
+    let mut search_filter = filter.unwrap_or(TransactionFilter {
+        account_id: None,
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        search: None,
+        limit: Some(DEFAULT_PAGE_SIZE),
+        offset: Some(DEFAULT_OFFSET),
+    });
+    search_filter.search = Some(query);
+
+    list_transactions_impl(db, Some(search_filter)).await
+}
+
+#[tauri::command]
+pub async fn search_transactions(
+    db_pool: tauri::State<'_, DbPool>,
+    query: String,
+    filter: Option<TransactionFilter>,
+) -> Result<Vec<Transaction>, String> {
+    search_transactions_impl(&db_pool.0, query, filter)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Delete transaction implementation
+pub async fn delete_transaction_impl(
+    db: &SqlitePool,
+    transaction_id: i64,
+) -> Result<(), TransactionError> {
+    let result = sqlx::query("DELETE FROM transactions WHERE id = ?")
+        .bind(transaction_id)
+        .execute(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    if result.rows_affected() == 0 {
+        return Err(TransactionError::NotFound(transaction_id));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_transaction(
+    db_pool: tauri::State<'_, DbPool>,
+    transaction_id: i64,
+) -> Result<(), String> {
+    delete_transaction_impl(&db_pool.0, transaction_id)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Bulk delete transactions implementation
+#[derive(Debug, Serialize)]
+pub struct BulkDeleteResult {
+    pub success: bool,
+    pub deleted_count: i64,
+    pub failed_ids: Vec<i64>,
+}
+
+pub async fn bulk_delete_transactions_impl(
+    db: &SqlitePool,
+    transaction_ids: Vec<i64>,
+) -> Result<BulkDeleteResult, TransactionError> {
+    // Validate input
+    if transaction_ids.is_empty() {
+        return Err(TransactionError::ValidationError("Transaction IDs cannot be empty".to_string()));
+    }
+    if transaction_ids.len() > MAX_BULK_OPERATION_IDS {
+        return Err(TransactionError::ValidationError(
+            format!("Cannot delete more than {} transactions at once", MAX_BULK_OPERATION_IDS)
+        ));
+    }
+
+    // First, check which IDs exist before deletion (to identify non-existent IDs later)
+    let existing_ids_before: std::collections::HashSet<i64> = if transaction_ids.len() > 0 {
+        let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
+
+        let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
+        for id in &transaction_ids {
+            check_query = check_query.bind(id);
+        }
+
+        check_query
+            .fetch_all(db)
+            .await
+            .map_err(|e| TransactionError::Database(e.to_string()))?
+            .into_iter()
+            .map(|(id,)| id)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Build batched DELETE query with IN clause for performance
+    // This executes 1 query instead of N queries (potentially 1000x faster)
+    let placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let query_str = format!("DELETE FROM transactions WHERE id IN ({})", placeholders);
+
+    let mut query = sqlx::query(&query_str);
+    for id in &transaction_ids {
+        query = query.bind(id);
+    }
+
+    let result = query
+        .execute(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    let deleted_count = result.rows_affected() as i64;
+
+    // Determine which IDs failed
+    // Failed IDs are those that either didn't exist or couldn't be deleted
+    let failed_ids: Vec<i64> = transaction_ids
+        .iter()
+        .filter(|id| !existing_ids_before.contains(id))
+        .copied()
+        .collect();
+
+    Ok(BulkDeleteResult {
+        success: true,
+        deleted_count,
+        failed_ids,
+    })
+}
+
+#[tauri::command]
+pub async fn bulk_delete_transactions(
+    db_pool: tauri::State<'_, DbPool>,
+    transaction_ids: Vec<i64>,
+) -> Result<BulkDeleteResult, String> {
+    bulk_delete_transactions_impl(&db_pool.0, transaction_ids)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+// Bulk update category implementation
+#[derive(Debug, Serialize)]
+pub struct BulkUpdateResult {
+    pub success: bool,
+    pub updated_count: i64,
+    pub failed_ids: Vec<i64>,
+}
+
+pub async fn bulk_update_category_impl(
+    db: &SqlitePool,
+    transaction_ids: Vec<i64>,
+    category_id: i64,
+) -> Result<BulkUpdateResult, TransactionError> {
+    // Validate input
+    if transaction_ids.is_empty() {
+        return Err(TransactionError::ValidationError("Transaction IDs cannot be empty".to_string()));
+    }
+    if transaction_ids.len() > MAX_BULK_OPERATION_IDS {
+        return Err(TransactionError::ValidationError(
+            format!("Cannot update more than {} transactions at once", MAX_BULK_OPERATION_IDS)
+        ));
+    }
+
+    // Verify category exists
+    let category_exists = sqlx::query("SELECT id FROM categories WHERE id = ?")
+        .bind(category_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    if category_exists.is_none() {
+        return Err(TransactionError::CategoryNotFound(category_id));
+    }
+
+    // First, check which IDs exist before update (to identify non-existent IDs)
+    let existing_ids_before: std::collections::HashSet<i64> = if transaction_ids.len() > 0 {
+        let check_placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let check_query_str = format!("SELECT id FROM transactions WHERE id IN ({})", check_placeholders);
+
+        let mut check_query = sqlx::query_as::<_, (i64,)>(&check_query_str);
+        for id in &transaction_ids {
+            check_query = check_query.bind(id);
+        }
+
+        check_query
+            .fetch_all(db)
+            .await
+            .map_err(|e| TransactionError::Database(e.to_string()))?
+            .into_iter()
+            .map(|(id,)| id)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Build batched UPDATE query with IN clause for performance
+    // This executes 1 query instead of N queries (potentially 1000x faster)
+    let placeholders = transaction_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let query_str = format!(
+        "UPDATE transactions SET category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id IN ({})",
+        placeholders
+    );
+
+    let mut query = sqlx::query(&query_str);
+    query = query.bind(category_id);
+    for id in &transaction_ids {
+        query = query.bind(id);
+    }
+
+    let result = query
+        .execute(db)
+        .await
+        .map_err(|e| TransactionError::Database(e.to_string()))?;
+
+    let updated_count = result.rows_affected() as i64;
+
+    // Determine which IDs failed
+    // Failed IDs are those that didn't exist in the database
+    let failed_ids: Vec<i64> = transaction_ids
+        .iter()
+        .filter(|id| !existing_ids_before.contains(id))
+        .copied()
+        .collect();
+
+    Ok(BulkUpdateResult {
+        success: true,
+        updated_count,
+        failed_ids,
+    })
+}
+
+#[tauri::command]
+pub async fn bulk_update_category(
+    db_pool: tauri::State<'_, DbPool>,
+    transaction_ids: Vec<i64>,
+    category_id: i64,
+) -> Result<BulkUpdateResult, String> {
+    bulk_update_category_impl(&db_pool.0, transaction_ids, category_id)
         .await
         .map_err(|e| e.to_user_message())
 }

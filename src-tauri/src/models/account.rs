@@ -36,3 +36,11 @@ pub struct NewAccount {
     pub account_type: AccountType,
     pub initial_balance: f64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateAccount {
+    pub id: i64,
+    pub name: Option<String>,
+    pub account_type: Option<AccountType>,
+    pub balance: Option<f64>,
+}

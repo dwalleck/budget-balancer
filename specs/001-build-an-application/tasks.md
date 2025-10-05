@@ -32,20 +32,20 @@
   - Generate test reports and upload as artifacts
 
 ### Code Quality & Best Practices (Based on Audit)
-- [ ] T011b **[CRITICAL]** Fix production unwrap() usage in Rust code
+- [x] T011b **[CRITICAL]** Fix production unwrap() usage in Rust code
   - Replace unwrap() in avalanche_calculator.rs:81 with unwrap_or(Ordering::Equal)
   - Replace unwrap() in snowball_calculator.rs:65 with unwrap_or(Ordering::Equal)
   - Fix Mutex unwrap() in rate_limiter.rs:193 with proper error handling
-- [ ] T011c **[CRITICAL]** Fix TypeScript any types in visualization components
+- [x] T011c **[CRITICAL]** Fix TypeScript any types in visualization components
   - Create proper interfaces for Recharts props in SpendingPieChart.tsx
   - Create proper interfaces for Recharts props in SpendingBarChart.tsx
   - Create proper interfaces for Recharts props in TrendsLineChart.tsx
   - Fix any type in AccountCreationDialog.tsx:75
-- [ ] T011d **[HIGH]** Fix ESLint warnings and errors
+- [x] T011d **[HIGH]** Fix ESLint warnings and errors
   - Remove unused variables (prefix with _ or remove imports)
   - Fix useEffect dependency warnings in TransactionList.tsx and TransactionsPage.tsx
   - Run `bun run lint --fix` for auto-fixable issues
-- [ ] T011e **[HIGH]** Fix Clippy warnings in Rust code
+- [x] T011e **[HIGH]** Fix Clippy warnings in Rust code
   - Fix manual range contains in debt_commands.rs:158
   - Fix unnecessary lazy evaluation in debt_commands.rs:318
   - Run `cargo clippy --fix` for auto-fixable issues
@@ -85,17 +85,17 @@
 ### Account Management Tests (contracts/accounts.md - 4 commands)
 - [x] T020 [P] Contract test for create_account command in src-tauri/tests/integration/accounts_test.rs
 - [x] T021 [P] Contract test for list_accounts command in src-tauri/tests/integration/accounts_test.rs
-- [ ] T022 [P] Contract test for update_account command in src-tauri/tests/integration/accounts_test.rs
-- [ ] T023 [P] Contract test for delete_account with cascade in src-tauri/tests/integration/accounts_test.rs
+- [x] T022 [P] Contract test for update_account command in src-tauri/tests/integration/accounts_test.rs
+- [x] T023 [P] Contract test for delete_account with cascade in src-tauri/tests/integration/accounts_test.rs
 
 ### Transaction Management Tests (contracts/transactions.md - 11 commands)
 - [x] T024 [P] Contract test for import_csv command in src-tauri/tests/integration/transactions_test.rs
 - [x] T025 [P] Contract test for list_transactions with pagination (25/page) in src-tauri/tests/integration/transactions_test.rs
-- [ ] T026 [P] Contract test for search_transactions with debounce in src-tauri/tests/integration/transactions_test.rs
+- [x] T026 [P] Contract test for search_transactions with debounce in src-tauri/tests/integration/transactions_test.rs
 - [x] T027 [P] Contract test for update_transaction_category command in src-tauri/tests/integration/transactions_test.rs
-- [ ] T028 [P] Contract test for delete_transaction command in src-tauri/tests/integration/transactions_test.rs
-- [ ] T029 [P] Contract test for bulk_delete_transactions (max 1000 IDs) in src-tauri/tests/integration/transactions_test.rs
-- [ ] T030 [P] Contract test for bulk_update_category command in src-tauri/tests/integration/transactions_test.rs
+- [x] T028 [P] Contract test for delete_transaction command in src-tauri/tests/integration/transactions_test.rs
+- [x] T029 [P] Contract test for bulk_delete_transactions (max 1000 IDs) in src-tauri/tests/integration/transactions_test.rs
+- [x] T030 [P] Contract test for bulk_update_category command in src-tauri/tests/integration/transactions_test.rs
 - [x] T031 [P] Contract test for categorize_transaction with rules in src-tauri/tests/integration/transactions_test.rs
 - [x] T032 [P] Contract test for export_transactions to CSV/JSON in src-tauri/tests/integration/transactions_test.rs
 - [ ] T033 [P] Contract test for save_column_mapping with upsert in src-tauri/tests/integration/column_mappings_test.rs
@@ -146,8 +146,8 @@
 ## Phase 3.4: Backend - Services & Commands Implementation (ONLY after tests fail)
 
 ### Account Services & Commands
-- [ ] T065 Create AccountService with CRUD operations in src-tauri/src/services/account_service.rs
-- [ ] T066 Implement account commands (create, list, update, delete) in src-tauri/src/commands/accounts.rs
+- [x] T065 Create AccountService with CRUD operations in src-tauri/src/services/account_service.rs
+- [x] T066 Implement account commands (create, list, update, delete) in src-tauri/src/commands/accounts.rs
 
 ### Category Services & Commands
 - [ ] T067 Create CategoryService with predefined protection in src-tauri/src/services/category_service.rs
@@ -165,9 +165,9 @@
 - [x] T073 Create TransactionService with duplicate detection in src-tauri/src/services/transaction_service.rs
 - [x] T074 Create CsvImportService with streaming and progress in src-tauri/src/services/csv_import_service.rs
 - [x] T075 Create CategorizationService with rule priority in src-tauri/src/services/categorization_service.rs
-- [ ] T076 Implement search_transactions command with debounce in src-tauri/src/commands/transactions.rs
-- [ ] T077 Implement delete_transaction command in src-tauri/src/commands/transactions.rs
-- [ ] T078 Implement bulk transaction commands (bulk_delete, bulk_update_category) in src-tauri/src/commands/transactions.rs
+- [x] T076 Implement search_transactions command with debounce in src-tauri/src/commands/transactions.rs
+- [x] T077 Implement delete_transaction command in src-tauri/src/commands/transactions.rs
+- [x] T078 Implement bulk transaction commands (bulk_delete, bulk_update_category) in src-tauri/src/commands/transactions.rs
 
 ### Debt Services & Commands (Enhanced)
 - [x] T079 Create DebtService with CRUD operations in src-tauri/src/services/debt_service.rs

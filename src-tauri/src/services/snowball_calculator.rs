@@ -62,7 +62,7 @@ impl SnowballCalculator {
                 } else if b.balance < 0.01 {
                     std::cmp::Ordering::Less
                 } else {
-                    a.balance.partial_cmp(&b.balance).unwrap()
+                    a.balance.partial_cmp(&b.balance).unwrap_or(std::cmp::Ordering::Equal)
                 }
             });
 
