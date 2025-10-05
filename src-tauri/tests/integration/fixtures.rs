@@ -7,26 +7,30 @@
 //! - **Performance**: Tests run faster without CSV parsing overhead
 //! - **Reliability**: Avoids rate limiter issues in parallel test execution
 //! - **Simplicity**: Cleaner test code with builder pattern API
-//! - **Isolation**: Each test gets unique data via timestamps
+//! - **Isolation**: Each test gets unique, realistic data via `fake` crate
 //!
 //! # Hash Uniqueness Strategy
 //!
 //! Transaction hashes are calculated from (date + amount + description) per the
 //! production duplicate detection logic. To prevent hash collisions when tests run
-//! in parallel, we append a microsecond timestamp to each description. This ensures
-//! that even identical test data across different tests will have unique hashes.
+//! in parallel, we append a unique suffix combining a fake name with a random number.
+//! This ensures guaranteed uniqueness while keeping test data realistic and readable.
+//!
+//! For example: "Coffee" becomes "Coffee (Alice1234)" or "Coffee (Bob5678)"
 //!
 //! Alternative approaches considered:
-//! - Shared counter (requires mutex, slower)
-//! - Random numbers (can still collide)
-//! - Test name in description (invasive, requires test context)
+//! - Timestamps: Unique but hard to read (13-digit numbers)
+//! - Shared counter: Requires mutex synchronization (slower)
+//! - Random words: Can collide, limited vocabulary
+//! - Test name in description: Too invasive, requires test context
 //!
-//! The timestamp approach provides the best balance of simplicity, performance,
-//! and guaranteed uniqueness.
+//! The `fake` crate + random number approach provides guaranteed uniqueness with
+//! human-readable, realistic test data.
 
 use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::constants::DEFAULT_CATEGORY_ID;
 use budget_balancer_lib::models::account::{AccountType, NewAccount};
+use fake::{Fake, Faker};
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqlitePool};
 
@@ -97,17 +101,19 @@ pub struct TestTransaction {
 
 impl TestTransaction {
     pub fn new(date: &str, amount: f64, description: &str) -> Self {
-        // Add microsecond timestamp to description to ensure uniqueness across parallel tests
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_micros();
+        // Add unique suffix to description to ensure uniqueness across parallel tests
+        // Combines fake data (name) with random number for guaranteed uniqueness
+        use fake::faker::name::en::FirstName;
+        use rand::Rng;
+
+        let name: String = FirstName().fake();
+        let number: u32 = rand::thread_rng().gen_range(1000..9999);
+        let unique_suffix = format!("{}{}", name, number);
 
         Self {
             date: date.to_string(),
             amount,
-            description: format!("{} [{}]", description, timestamp),
+            description: format!("{} ({})", description, unique_suffix),
             merchant: None,
             category_id: None,
         }
