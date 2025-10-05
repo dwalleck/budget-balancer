@@ -50,6 +50,13 @@ impl RateLimiter {
 
         Ok(())
     }
+
+    /// Reset the rate limiter (for testing purposes)
+    /// Note: Public to allow integration tests to reset state
+    pub fn reset(&self) {
+        let mut last = self.last_request.lock().unwrap();
+        *last = Instant::now() - Duration::from_secs(100);
+    }
 }
 
 #[cfg(test)]

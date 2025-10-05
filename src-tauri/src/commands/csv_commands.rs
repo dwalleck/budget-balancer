@@ -11,6 +11,13 @@ use sqlx::SqlitePool;
 // Global rate limiter for CSV imports
 static CSV_RATE_LIMITER: Lazy<RateLimiter> = Lazy::new(|| RateLimiter::new(MIN_CSV_IMPORT_INTERVAL_MS));
 
+// Test helper to reset rate limiter between tests
+// Note: This is public to allow integration tests to reset the rate limiter
+// In production, this function exists but is never called
+pub fn reset_rate_limiter() {
+    CSV_RATE_LIMITER.reset();
+}
+
 #[derive(Debug, Serialize)]
 pub struct ImportResult {
     pub success: bool,
@@ -55,6 +62,10 @@ pub async fn import_csv_impl(
     csv_content: String,
     mapping: ColumnMapping,
 ) -> Result<ImportResult, String> {
+    // Check rate limit FIRST (before expensive operations)
+    // This ensures rate limiting cannot be bypassed by calling _impl directly
+    CSV_RATE_LIMITER.check_and_update()?;
+
     // Validate file size
     if csv_content.len() > MAX_CSV_FILE_SIZE {
         return Err(format!(
@@ -124,8 +135,6 @@ pub async fn import_csv(
     csv_content: String,
     mapping: ColumnMapping,
 ) -> Result<ImportResult, String> {
-    // Check rate limit
-    CSV_RATE_LIMITER.check_and_update()?;
-
+    // Rate limiting is enforced in import_csv_impl to prevent bypass
     import_csv_impl(&db_pool.0, account_id, csv_content, mapping).await
 }

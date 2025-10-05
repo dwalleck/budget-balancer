@@ -1,7 +1,7 @@
 // Security tests for input validation, rate limiting, and SQL injection protection
 
 use budget_balancer_lib::commands::account_commands::create_account_impl;
-use budget_balancer_lib::commands::csv_commands::{get_csv_headers, import_csv_impl};
+use budget_balancer_lib::commands::csv_commands::{get_csv_headers, import_csv_impl, reset_rate_limiter};
 use budget_balancer_lib::commands::transaction_commands::{list_transactions_impl, TransactionFilter};
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
@@ -24,7 +24,9 @@ async fn test_csv_file_size_limit_enforced() {
 }
 
 #[tokio::test]
-async fn test_csv_file_size_limit_at_boundary() {
+async fn test_csv_file_size_just_under_limit() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
     let db = super::get_test_db_pool().await;
 
     // Create test account
@@ -35,10 +37,11 @@ async fn test_csv_file_size_limit_at_boundary() {
     };
     let account_id = create_account_impl(db, account).await.unwrap();
 
-    // Generate CSV at exactly 10MB (should be accepted)
-    let mut large_csv = "Date,Amount,Description\n".to_string();
-    while large_csv.len() < 10 * 1024 * 1024 - 100 {
-        large_csv.push_str("2024-01-01,-10.00,Test\n");
+    // Generate a CSV with 1000 rows (well under 10,000 row limit)
+    // and moderate file size (under 10MB limit)
+    let mut csv = "Date,Amount,Description\n".to_string();
+    for i in 0..1000 {
+        csv.push_str(&format!("2024-01-01,-{}.00,Test transaction {}\n", i % 100, i));
     }
 
     let mapping = ColumnMapping {
@@ -48,16 +51,18 @@ async fn test_csv_file_size_limit_at_boundary() {
         merchant: None,
     };
 
-    let result = import_csv_impl(db, account_id, large_csv, mapping).await;
+    let result = import_csv_impl(db, account_id, csv, mapping).await;
 
-    // Should succeed (file is at limit, not over)
-    assert!(result.is_ok() || result.is_err(), "Should process file at size limit");
+    // Should succeed (file is well under 10MB limit)
+    assert!(result.is_ok(), "Should successfully process file under size limit: {:?}", result.err());
 }
 
 // ==== CSV Row Count Validation Tests ====
 
 #[tokio::test]
 async fn test_csv_row_count_limit_enforced() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
     let db = super::get_test_db_pool().await;
 
     // Create test account
@@ -96,8 +101,8 @@ async fn test_csv_row_count_limit_enforced() {
 
 #[tokio::test]
 async fn test_csv_import_rate_limiting() {
-    // Note: This test uses the global rate limiter, so it may be affected by other tests
-    // Running this in isolation would be ideal
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
 
     let db = super::get_test_db_pool().await;
 
@@ -263,6 +268,8 @@ async fn test_errors_dont_expose_database_paths() {
 
 #[tokio::test]
 async fn test_csv_error_messages_are_safe() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
     let db = super::get_test_db_pool().await;
 
     let account = NewAccount {
