@@ -10,7 +10,10 @@ pub async fn list_accounts_impl(db: &SqlitePool) -> Result<Vec<Account>, String>
     )
     .fetch_all(db)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| {
+        eprintln!("Database error loading accounts: {}", e);
+        "Failed to load accounts".to_string()
+    })
 }
 
 pub async fn create_account_impl(
@@ -25,7 +28,10 @@ pub async fn create_account_impl(
     .bind(account.initial_balance)
     .execute(db)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        eprintln!("Database error creating account: {}", e);
+        "Failed to create account".to_string()
+    })?;
 
     Ok(result.last_insert_rowid())
 }

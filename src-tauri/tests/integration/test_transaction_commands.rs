@@ -1,6 +1,6 @@
 use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::category_commands::create_category_impl;
-use budget_balancer_lib::commands::transaction_commands::{list_transactions_impl, update_transaction_category_impl, TransactionFilter};
+use budget_balancer_lib::commands::transaction_commands::{count_transactions_impl, list_transactions_impl, update_transaction_category_impl, TransactionFilter};
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::models::category::NewCategory;
 
@@ -126,4 +126,90 @@ async fn test_list_transactions_with_category_filter() {
     for transaction in transactions {
         assert_eq!(transaction.category_id, category_id);
     }
+}
+
+// ==== Pagination Tests ====
+
+#[tokio::test]
+async fn test_pagination_defaults_applied_when_none() {
+    let db = super::get_test_db_pool().await;
+
+    // Pass filter with limit=None, offset=None
+    let filter = Some(TransactionFilter {
+        account_id: None,
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        limit: None,  // Should default to 50
+        offset: None, // Should default to 0
+    });
+
+    let result = list_transactions_impl(db, filter).await;
+    assert!(result.is_ok(), "Should successfully apply default pagination");
+
+    let transactions = result.unwrap();
+    // Should return at most 50 (default page size)
+    assert!(transactions.len() <= 50, "Should respect default page size of 50");
+}
+
+#[tokio::test]
+async fn test_pagination_max_limit_enforced() {
+    let db = super::get_test_db_pool().await;
+
+    // Try to request 1000 items (above max of 100)
+    let filter = Some(TransactionFilter {
+        account_id: None,
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        limit: Some(1000), // Should be clamped to 100
+        offset: Some(0),
+    });
+
+    let result = list_transactions_impl(db, filter).await;
+    assert!(result.is_ok(), "Should successfully clamp to max page size");
+
+    let transactions = result.unwrap();
+    // Should return at most 100 (max page size)
+    assert!(transactions.len() <= 100, "Should respect max page size of 100");
+}
+
+#[tokio::test]
+async fn test_count_transactions_without_filter() {
+    let db = super::get_test_db_pool().await;
+
+    let result = count_transactions_impl(db, None).await;
+    assert!(result.is_ok(), "Should successfully count transactions");
+
+    let count = result.unwrap();
+    assert!(count >= 0, "Count should be non-negative");
+}
+
+#[tokio::test]
+async fn test_count_transactions_with_filter() {
+    let db = super::get_test_db_pool().await;
+
+    // Create a test account
+    let account = NewAccount {
+        name: super::unique_name("Count Test"),
+        account_type: budget_balancer_lib::models::account::AccountType::Checking,
+        initial_balance: 0.0,
+    };
+    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+
+    let filter = Some(TransactionFilter {
+        account_id: Some(account_id),
+        category_id: None,
+        start_date: None,
+        end_date: None,
+        limit: None,
+        offset: None,
+    });
+
+    let result = count_transactions_impl(db, filter).await;
+    assert!(result.is_ok(), "Should successfully count filtered transactions");
+
+    let count = result.unwrap();
+    // Count for new account should be 0 (no transactions yet)
+    assert_eq!(count, 0, "New account should have 0 transactions");
 }

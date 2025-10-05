@@ -3,6 +3,7 @@
 
 pub mod constants;
 pub mod db;
+pub mod errors;
 pub mod models;
 pub mod services;
 pub mod commands;
@@ -41,6 +42,7 @@ pub fn run() {
             commands::csv_commands::import_csv,
             commands::csv_commands::save_column_mapping,
             commands::transaction_commands::list_transactions,
+            commands::transaction_commands::count_transactions,
             commands::transaction_commands::update_transaction_category,
             commands::transaction_commands::categorize_transaction,
             commands::transaction_commands::export_transactions,

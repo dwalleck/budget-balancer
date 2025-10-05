@@ -323,6 +323,49 @@ if filter.account_id.is_some() {
 
 ---
 
+#### 9a. Dynamic SQL Query Building Pattern (CODE QUALITY)
+**Issue**: String concatenation pattern for building SQL queries contradicts SECURITY.md guidelines
+
+**Source**: PR #3 Review Feedback (https://github.com/dwalleck/budget-balancer/pull/3#issuecomment-3368687969)
+
+**Current State**:
+- `list_transactions_impl` (transaction_commands.rs:20-91) builds queries via string concatenation
+- While currently safe (uses proper parameterized bindings), the pattern itself is risky
+- Contradicts SECURITY.md best practices
+- Future developers might copy the pattern and introduce vulnerabilities
+
+**Example Current Code**:
+```rust
+let mut query = String::from("SELECT ... WHERE 1=1");
+if filter.account_id.is_some() {
+    query.push_str(" AND account_id = ?");  // Safe but risky pattern
+}
+// ... more string building
+let mut query_builder = sqlx::query_as::<_, Transaction>(&query);
+```
+
+**Impact**:
+- Low (currently safe due to proper parameterization)
+- Pattern could be copied incorrectly in future code
+- Inconsistent with documented best practices
+
+**Planned Fix**:
+1. Refactor to use SQLx query builder or similar safe abstraction
+2. Consider creating a TransactionQueryBuilder helper
+3. Update SECURITY.md examples if needed
+4. Ensure pattern is consistent across codebase
+
+**Priority**: 🟢 LOW
+**Effort**: 2-3 hours
+**Target**: Week 3
+**Status**: Deferred from PR #3 review (reviewer approved merge with this as future improvement)
+
+**Files Affected**:
+- `src-tauri/src/commands/transaction_commands.rs` (list_transactions_impl)
+- Potentially other command files with similar patterns
+
+---
+
 ## Additional Enhancements (Nice to Have)
 
 ### 10. Database Backup/Export Functionality
@@ -384,11 +427,13 @@ if filter.account_id.is_some() {
 - [ ] Extract magic numbers to constants (#7)
 - [ ] Standardize error handling (#8)
 - [ ] Remove remaining code duplication (#9)
+- [ ] Refactor dynamic SQL query building pattern (#9a - from PR #3 review)
 
 **Success Criteria**:
 - No magic numbers in code
 - Consistent error handling across modules
 - DRY principles enforced
+- SQL query building uses safer patterns (querybuilder or prepared statements)
 
 ---
 

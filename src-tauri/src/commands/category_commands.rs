@@ -10,7 +10,10 @@ pub async fn list_categories_impl(db: &SqlitePool) -> Result<Vec<Category>, Stri
     )
     .fetch_all(db)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| {
+        eprintln!("Database error loading categories: {}", e);
+        "Failed to load categories".to_string()
+    })
 }
 
 pub async fn create_category_impl(
@@ -24,7 +27,10 @@ pub async fn create_category_impl(
     .bind(&category.icon)
     .execute(db)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        eprintln!("Database error creating category: {}", e);
+        "Failed to create category".to_string()
+    })?;
 
     Ok(result.last_insert_rowid())
 }

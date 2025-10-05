@@ -1,3 +1,4 @@
+use crate::errors::sanitize_db_error;
 use crate::models::debt::{Debt, DebtPayment, NewDebt};
 use crate::services::avalanche_calculator::AvalancheCalculator;
 use crate::services::snowball_calculator::SnowballCalculator;
@@ -101,7 +102,7 @@ pub async fn create_debt_impl(db: &SqlitePool, debt: NewDebt) -> Result<i64, Str
     .bind(debt.min_payment)
     .execute(db)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| sanitize_db_error(e, "create debt"))?;
 
     Ok(result.last_insert_rowid())
 }
@@ -119,7 +120,7 @@ pub async fn list_debts_impl(db: &SqlitePool) -> Result<Vec<Debt>, String> {
     )
     .fetch_all(db)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| sanitize_db_error(e, "load debts"))
 }
 
 // T031: List debts command
