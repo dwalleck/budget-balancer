@@ -11,6 +11,7 @@ mod test_debt_commands;
 mod test_export_report;
 mod test_export_transactions;
 mod test_import_csv;
+mod test_security;
 mod test_spending_by_category;
 mod test_spending_trends;
 mod test_targets_progress;

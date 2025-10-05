@@ -38,13 +38,42 @@ Budget Balancer is a single-user desktop application for tracking spending and m
 ## Technical Context
 **Language/Version**: TypeScript 5.x / React 18
 **Primary Dependencies**: Tauri 2, React 18, Radix UI, Tailwind CSS, Vite, Zustand, Vitest
-**Storage**: SQLite (via Tauri SQL plugin) for local data persistence
-**Testing**: Vitest for unit/integration tests, Tauri test utilities for E2E
+**Storage**: SQLite (via Tauri SQL plugin) for local data persistence with connection pooling
+**Testing**: Vitest for unit/integration tests, Tauri test utilities for E2E, cargo-llvm-cov for coverage
 **Target Platform**: Desktop (Windows, macOS, Linux via Tauri 2)
 **Project Type**: Desktop application (Tauri + React SPA)
 **Performance Goals**: <100ms UI response time, <500ms for CSV import/processing, smooth 60fps visualizations
 **Constraints**: Offline-capable, single-user local storage, OS-level security only
 **Scale/Scope**: Personal finance management, ~10k transactions/year expected, <50MB data storage typical
+
+## Non-Functional Requirements
+
+### Security (See `SECURITY.md`)
+- **SQL Injection Prevention**: All database queries MUST use parameterized statements
+- **Input Validation**: All user input MUST be validated before processing
+  - CSV file size limited to 10MB maximum
+  - CSV row count limited to 10,000 rows
+  - Numeric inputs validated for reasonable ranges
+  - Text inputs sanitized and length-limited
+- **Rate Limiting**: CSV imports throttled to minimum 2 seconds between uploads
+- **Error Messages**: No internal details (file paths, database info, stack traces) exposed to users
+- **Database Security**: Path validation to prevent directory traversal attacks
+
+### Performance
+- **Database**: Connection pooling with maximum 5 concurrent connections
+- **Transaction Queries**: Paginated with default 50 items per page, max 100
+- **CSV Import**: Stream processing for files >100 rows, progress reporting for >1000 rows
+- **Async Operations**: All long-running tasks (imports, calculations) run asynchronously
+- **Query Optimization**: Indexes on frequently queried columns (date, category_id, account_id)
+
+### Code Quality
+- **No Magic Numbers**: All constants extracted to named constants module
+- **Consistent Error Handling**: Standardized error types across all modules
+- **DRY Principles**: No duplicate code, shared utilities for common patterns
+- **Testing**: TDD required for all new features
+  - Backend: >60% line coverage minimum
+  - Frontend: >70% coverage minimum
+  - Critical paths: 100% coverage required
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*

@@ -1,3 +1,4 @@
+use crate::constants::{DEFAULT_CATEGORY_ID, DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 use crate::models::transaction::Transaction;
 use crate::services::categorizer::Categorizer;
 use crate::DbPool;
@@ -30,9 +31,12 @@ pub async fn list_transactions_impl(
         category_id: None,
         start_date: None,
         end_date: None,
-        limit: Some(100),
-        offset: Some(0),
+        limit: Some(DEFAULT_PAGE_SIZE),
+        offset: Some(DEFAULT_OFFSET),
     });
+
+    // Enforce maximum page size
+    let limit = filter.limit.map(|l| l.min(MAX_PAGE_SIZE));
 
     if filter.account_id.is_some() {
         query.push_str(" AND account_id = ?");
@@ -49,7 +53,7 @@ pub async fn list_transactions_impl(
 
     query.push_str(" ORDER BY date DESC");
 
-    if filter.limit.is_some() {
+    if limit.is_some() {
         query.push_str(" LIMIT ?");
     }
     if filter.offset.is_some() {
@@ -70,8 +74,8 @@ pub async fn list_transactions_impl(
     if let Some(end_date) = filter.end_date {
         query_builder = query_builder.bind(end_date);
     }
-    if let Some(limit) = filter.limit {
-        query_builder = query_builder.bind(limit);
+    if let Some(limit_val) = limit {
+        query_builder = query_builder.bind(limit_val);
     }
     if let Some(offset) = filter.offset {
         query_builder = query_builder.bind(offset);
@@ -80,7 +84,10 @@ pub async fn list_transactions_impl(
     query_builder
         .fetch_all(db)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            eprintln!("Database error loading transactions: {}", e);
+            "Failed to load transactions".to_string()
+        })
 }
 
 pub async fn update_transaction_category_impl(
@@ -93,7 +100,10 @@ pub async fn update_transaction_category_impl(
         .bind(transaction_id)
         .execute(db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            eprintln!("Database error updating transaction category: {}", e);
+            "Failed to update transaction category".to_string()
+        })?;
 
     Ok(())
 }
@@ -125,8 +135,11 @@ pub async fn categorize_transaction_impl(
         &transaction.description,
     )
     .await
-    .map_err(|e| e.to_string())?
-    .unwrap_or(10); // Default to "Uncategorized" (id 10)
+    .map_err(|e| {
+        eprintln!("Categorization error: {}", e);
+        "Failed to categorize transaction".to_string()
+    })?
+    .unwrap_or(DEFAULT_CATEGORY_ID); // Default to "Uncategorized"
 
     // Update the transaction with new category
     sqlx::query("UPDATE transactions SET category_id = ? WHERE id = ?")
