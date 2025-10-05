@@ -1,6 +1,7 @@
 // Integration tests for Budget Balancer Tauri commands
 // These tests verify the contract/interface of each command
 
+pub mod fixtures;
 mod test_account_commands;
 mod test_categorize;
 mod test_category_commands;
@@ -20,6 +21,9 @@ mod test_update_target;
 
 use sqlx::SqlitePool;
 use std::sync::OnceLock;
+
+/// Rate limiter minimum interval is 2 seconds, so we wait 2100ms to ensure it has elapsed
+pub const RATE_LIMITER_DELAY_MS: u64 = 2100;
 
 // Static database pool shared across all tests
 static DB_POOL: OnceLock<SqlitePool> = OnceLock::new();
@@ -72,4 +76,13 @@ pub fn unique_name(prefix: &str) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
     format!("{} {}", prefix, timestamp)
+}
+
+/// Helper function to get a date N days ago from today in YYYY-MM-DD format
+/// This ensures test dates are always relative to the current date, preventing
+/// failures when the calendar month changes.
+pub fn days_ago(days: u32) -> String {
+    use chrono::{Duration, Utc};
+    let date = Utc::now() - Duration::days(days as i64);
+    date.format("%Y-%m-%d").to_string()
 }

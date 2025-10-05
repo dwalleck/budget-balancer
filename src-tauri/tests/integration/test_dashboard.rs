@@ -1,8 +1,4 @@
-use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::analytics_commands::get_dashboard_summary_impl;
-use budget_balancer_lib::commands::csv_commands::import_csv_impl;
-use budget_balancer_lib::models::account::NewAccount;
-use budget_balancer_lib::services::csv_parser::ColumnMapping;
 
 #[tokio::test]
 async fn test_get_dashboard_summary_current_month() {
@@ -45,26 +41,15 @@ async fn test_get_dashboard_summary_current_year() {
 #[tokio::test]
 async fn test_dashboard_with_data() {
     let db = super::get_test_db_pool().await;
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Dashboard Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    let account_id = super::fixtures::create_test_account(db, "Dashboard Test").await;
 
-    // Import transactions
-    let csv_content = "Date,Amount,Description,Merchant\n2025-01-15,-100.00,Groceries,Whole Foods\n2025-01-20,500.00,Paycheck,Employer";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: Some("Merchant".to_string()),
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    // Create test transactions with relative dates (2 and 4 days ago)
+    // This ensures tests work regardless of current date or month
+    let transactions = vec![
+        super::fixtures::TestTransaction::new(&super::days_ago(4), -100.00, "Groceries").with_merchant("Whole Foods"),
+        super::fixtures::TestTransaction::new(&super::days_ago(2), 500.00, "Paycheck").with_merchant("Employer"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Get dashboard
     let result = get_dashboard_summary_impl(db, "current_month").await;
@@ -72,5 +57,6 @@ async fn test_dashboard_with_data() {
     assert!(result.is_ok(), "Dashboard should work with data");
 
     let response = result.unwrap();
-    assert!(response.total_spending > 0.0 || response.total_income > 0.0, "Should have some financial activity");
+    println!("Dashboard response: total_spending={}, total_income={}", response.total_spending, response.total_income);
+    assert!(response.total_spending > 0.0 || response.total_income > 0.0, "Should have some financial activity. Got spending={}, income={}", response.total_spending, response.total_income);
 }

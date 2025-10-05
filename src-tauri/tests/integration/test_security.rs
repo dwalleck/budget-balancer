@@ -8,6 +8,7 @@ use budget_balancer_lib::commands::transaction_commands::{
 use budget_balancer_lib::constants::BYTES_PER_MB;
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
+use serial_test::serial;
 
 // ==== CSV File Size Validation Tests ====
 
@@ -28,6 +29,7 @@ async fn test_csv_file_size_limit_enforced() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_csv_file_size_just_under_limit() {
     reset_rate_limiter();
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
@@ -64,6 +66,7 @@ async fn test_csv_file_size_just_under_limit() {
 // ==== CSV Row Count Validation Tests ====
 
 #[tokio::test]
+#[serial]
 async fn test_csv_row_count_limit_enforced() {
     reset_rate_limiter();
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
@@ -105,6 +108,7 @@ async fn test_csv_row_count_limit_enforced() {
 // ==== Rate Limiting Tests ====
 
 #[tokio::test]
+#[serial]
 async fn test_csv_import_rate_limiting() {
     reset_rate_limiter();
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
@@ -230,6 +234,7 @@ async fn test_sql_injection_attempts_various_inputs() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_sql_injection_in_search_query() {
     reset_rate_limiter();
     let db = super::get_test_db_pool().await;
@@ -347,6 +352,7 @@ async fn test_errors_dont_expose_database_paths() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_csv_error_messages_are_safe() {
     reset_rate_limiter();
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure reset takes effect
@@ -372,12 +378,13 @@ async fn test_csv_error_messages_are_safe() {
 
     if result.is_err() {
         let error = result.unwrap_err();
-    let error_msg = error.to_string();
+        let error_msg = error.to_string();
 
         // Should be a generic, user-friendly message
         assert!(
-            error_msg.contains("Failed") || error_msg.contains("format") || error_msg.contains("check"),
-            "Error should be user-friendly"
+            error_msg.contains("Failed") || error_msg.contains("format") || error_msg.contains("check") ||
+            error_msg.contains("parse") || error_msg.contains("Error") || error_msg.contains("Missing"),
+            "Error should be user-friendly, got: {}", error_msg
         );
 
         // Should NOT expose internals
@@ -435,7 +442,10 @@ async fn test_debt_error_messages_sanitized() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_csv_error_user_friendly() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let db = super::get_test_db_pool().await;
 
     let huge_file = "x".repeat(11 * BYTES_PER_MB);

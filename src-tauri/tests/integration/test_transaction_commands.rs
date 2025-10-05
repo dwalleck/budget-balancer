@@ -1,14 +1,10 @@
-use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::category_commands::create_category_impl;
-use budget_balancer_lib::commands::csv_commands::{import_csv_impl, reset_rate_limiter};
 use budget_balancer_lib::commands::transaction_commands::{
     bulk_delete_transactions_impl, bulk_update_category_impl, count_transactions_impl,
     delete_transaction_impl, list_transactions_impl, search_transactions_impl,
     update_transaction_category_impl, TransactionFilter,
 };
-use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::models::category::NewCategory;
-use budget_balancer_lib::services::csv_parser::ColumnMapping;
 
 #[tokio::test]
 async fn test_list_transactions_empty() {
@@ -24,13 +20,7 @@ async fn test_list_transactions_empty() {
 #[tokio::test]
 async fn test_list_transactions_with_account_filter() {
     let db = super::get_test_db_pool().await;
-    // Create a test account
-    let account = NewAccount {
-        name: super::unique_name("Transaction Filter Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    let account_id = super::fixtures::create_test_account(db, "Transaction Filter Test").await;
 
     let filter = Some(TransactionFilter {
         account_id: Some(account_id),
@@ -142,35 +132,19 @@ async fn test_list_transactions_with_category_filter() {
 
 #[tokio::test]
 async fn test_pagination_defaults_applied_when_none() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Pagination Default Test").await;
 
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Pagination Default Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    // Create 75 test transactions via CSV import
-    let mut csv_rows = vec!["Date,Amount,Description".to_string()];
+    // Create 75 test transactions directly (no CSV import needed!)
+    let mut transactions = Vec::new();
     for i in 0..75 {
-        csv_rows.push(format!("2024-01-{:02},-{}.00,Test Transaction {}",
-            (i % 28) + 1, i + 1, i + 1));
+        transactions.push(super::fixtures::TestTransaction::new(
+            &format!("2024-01-{:02}", (i % 28) + 1),
+            -(i as f64 + 1.0),
+            &format!("Test Transaction {}", i + 1),
+        ));
     }
-    let csv_content = csv_rows.join("\n");
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content, mapping)
-        .await
-        .expect("Failed to import test transactions");
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Pass filter with limit=None, offset=None for this account only
     let filter = Some(TransactionFilter {
@@ -193,36 +167,19 @@ async fn test_pagination_defaults_applied_when_none() {
 
 #[tokio::test]
 async fn test_pagination_max_limit_enforced() {
-    reset_rate_limiter();
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // Ensure rate limit reset
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Pagination Max Test").await;
 
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Pagination Max Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    // Create 150 test transactions to test max limit
-    let mut csv_rows = vec!["Date,Amount,Description".to_string()];
+    // Create 150 test transactions directly (no CSV import!)
+    let mut transactions = Vec::new();
     for i in 0..150 {
-        csv_rows.push(format!("2024-{:02}-{:02},-{}.00,Test Transaction {}",
-            (i / 28) + 1, (i % 28) + 1, i + 1, i + 1));
+        transactions.push(super::fixtures::TestTransaction::new(
+            &format!("2024-{:02}-{:02}", (i / 28) + 1, (i % 28) + 1),
+            -(i as f64 + 1.0),
+            &format!("Test Transaction {}", i + 1),
+        ));
     }
-    let csv_content = csv_rows.join("\n");
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content, mapping)
-        .await
-        .expect("Failed to import test transactions");
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Try to request 1000 items (above max of 100) for this account only
     let filter = Some(TransactionFilter {
@@ -257,14 +214,7 @@ async fn test_count_transactions_without_filter() {
 #[tokio::test]
 async fn test_count_transactions_with_filter() {
     let db = super::get_test_db_pool().await;
-
-    // Create a test account
-    let account = NewAccount {
-        name: super::unique_name("Count Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    let account_id = super::fixtures::create_test_account(db, "Count Test").await;
 
     let filter = Some(TransactionFilter {
         account_id: Some(account_id),
@@ -325,33 +275,16 @@ async fn test_list_transactions_combined_filters() {
 
 #[tokio::test]
 async fn test_search_transactions_by_description() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Search Test Account").await;
 
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Search Test Account"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    // Import transactions with specific descriptions
-    let csv_content = "Date,Amount,Description\n\
-                       2025-01-01,-50.00,Grocery shopping at Whole Foods\n\
-                       2025-01-02,-25.00,Coffee at Starbucks\n\
-                       2025-01-03,-100.00,Electronics purchase";
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    // Create test transactions directly
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-01", -50.00, "Grocery shopping at Whole Foods"),
+        super::fixtures::TestTransaction::new("2025-01-02", -25.00, "Coffee at Starbucks"),
+        super::fixtures::TestTransaction::new("2025-01-03", -100.00, "Electronics purchase"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Test search by description substring (case-insensitive)
     let result = search_transactions_impl(db, "grocery".to_string(), None).await;
@@ -367,33 +300,16 @@ async fn test_search_transactions_by_description() {
 
 #[tokio::test]
 async fn test_search_transactions_by_merchant() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Search Merchant Test").await;
 
-    // Create test account
-    let account = NewAccount {
-        name: super::unique_name("Search Merchant Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    // Import transactions with merchant field
-    let csv_content = "Date,Amount,Description,Merchant\n\
-                       2025-01-01,-50.00,Purchase,Starbucks Coffee\n\
-                       2025-01-02,-75.00,Purchase,Whole Foods Market\n\
-                       2025-01-03,-30.00,Purchase,Shell Gas Station";
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: Some("Merchant".to_string()),
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    // Create test transactions with merchants
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-01", -50.00, "Purchase").with_merchant("Starbucks Coffee"),
+        super::fixtures::TestTransaction::new("2025-01-02", -75.00, "Purchase").with_merchant("Whole Foods Market"),
+        super::fixtures::TestTransaction::new("2025-01-03", -30.00, "Purchase").with_merchant("Shell Gas Station"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Test search by merchant substring
     let result = search_transactions_impl(db, "starbucks".to_string(), None).await;
@@ -410,27 +326,13 @@ async fn test_search_transactions_by_merchant() {
 
 #[tokio::test]
 async fn test_search_transactions_case_insensitive() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Case Test").await;
 
-    let account = NewAccount {
-        name: super::unique_name("Case Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    let csv_content = "Date,Amount,Description\n2025-01-01,-50.00,Whole Foods Market";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-01", -50.00, "Whole Foods Market"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Search with different case
     let result = search_transactions_impl(db, "WHOLE FOODS".to_string(), None).await;
@@ -440,33 +342,19 @@ async fn test_search_transactions_case_insensitive() {
 
 #[tokio::test]
 async fn test_search_transactions_with_pagination() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Pagination Search Test").await;
 
-    let account = NewAccount {
-        name: super::unique_name("Pagination Search Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    // Create multiple transactions with "store" in description
-    let mut csv_rows = vec!["Date,Amount,Description".to_string()];
+    // Create 10 transactions with "store" in description
+    let mut transactions = Vec::new();
     for i in 0..10 {
-        csv_rows.push(format!("2025-01-{:02},-{}.00,Store purchase {}", i + 1, i + 10, i));
+        transactions.push(super::fixtures::TestTransaction::new(
+            &format!("2025-01-{:02}", i + 1),
+            -(i as f64 + 10.0),
+            &format!("Store purchase {}", i),
+        ));
     }
-    let csv_content = csv_rows.join("\n");
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Search with pagination
     let filter = Some(TransactionFilter {
@@ -500,33 +388,17 @@ async fn test_search_transactions_validates_query_length() {
 
 #[tokio::test]
 async fn test_search_escapes_like_wildcards() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
-
-    let account = NewAccount {
-        name: super::unique_name("Wildcard Escape Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    let account_id = super::fixtures::create_test_account(db, "Wildcard Escape Test").await;
 
     // Create transactions with special LIKE characters
-    let csv_content = "Date,Amount,Description\n\
-                       2025-01-01,-50.00,100% discount offer\n\
-                       2025-01-02,-75.00,100 regular item\n\
-                       2025-01-03,-30.00,50_50 split payment\n\
-                       2025-01-04,-40.00,50 normal payment";
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-01", -50.00, "100% discount offer"),
+        super::fixtures::TestTransaction::new("2025-01-02", -75.00, "100 regular item"),
+        super::fixtures::TestTransaction::new("2025-01-03", -30.00, "50_50 split payment"),
+        super::fixtures::TestTransaction::new("2025-01-04", -40.00, "50 normal payment"),
+    ];
+    super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Test 1: Search for "100%" should match only "100% discount", not "100 regular"
     let result = search_transactions_impl(db, "100%".to_string(), Some(TransactionFilter {
@@ -573,44 +445,17 @@ async fn test_search_escapes_like_wildcards() {
 
 #[tokio::test]
 async fn test_delete_transaction_success() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Delete Test").await;
 
-    // Create test account and transaction
-    let account = NewAccount {
-        name: super::unique_name("Delete Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    let csv_content = "Date,Amount,Description\n2025-01-01,-50.00,Test Transaction";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
-
-    // Get the transaction ID
-    let transactions = list_transactions_impl(db, Some(TransactionFilter {
-        account_id: Some(account_id),
-        category_id: None,
-        search: None,
-        start_date: None,
-        end_date: None,
-        limit: Some(1),
-        offset: Some(0),
-    }))
-    .await
-    .expect("Failed to list transactions");
-
-    assert!(!transactions.is_empty(), "Should have at least one transaction");
-    let transaction_id = transactions[0].id;
+    // Create test transaction directly
+    let transaction_id = super::fixtures::insert_single_transaction(
+        db,
+        account_id,
+        "2025-01-01",
+        -50.00,
+        "Test Transaction"
+    ).await;
 
     // Delete the transaction
     let result = delete_transaction_impl(db, transaction_id).await;
@@ -653,48 +498,17 @@ async fn test_delete_transaction_not_found() {
 
 #[tokio::test]
 async fn test_bulk_delete_transactions_success() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Bulk Delete Test").await;
 
-    // Create test account and multiple transactions
-    let account = NewAccount {
-        name: super::unique_name("Bulk Delete Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    let csv_content = "Date,Amount,Description\n\
-                       2025-01-01,-50.00,Transaction 1\n\
-                       2025-01-02,-75.00,Transaction 2\n\
-                       2025-01-03,-100.00,Transaction 3";
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
-
-    // Get transaction IDs
-    let transactions = list_transactions_impl(db, Some(TransactionFilter {
-        account_id: Some(account_id),
-        category_id: None,
-        search: None,
-        start_date: None,
-        end_date: None,
-        limit: Some(3),
-        offset: Some(0),
-    }))
-    .await
-    .expect("Failed to list transactions");
-
-    let ids: Vec<i64> = transactions.iter().map(|t| t.id).collect();
-    assert_eq!(ids.len(), 3, "Should have 3 transactions");
+    // Create 3 test transactions directly
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-01", -50.00, "Transaction 1"),
+        super::fixtures::TestTransaction::new("2025-01-02", -75.00, "Transaction 2"),
+        super::fixtures::TestTransaction::new("2025-01-03", -100.00, "Transaction 3"),
+    ];
+    let ids = super::fixtures::insert_test_transactions(db, account_id, transactions).await;
+    assert_eq!(ids.len(), 3, "Should have created 3 transactions");
 
     // Bulk delete
     let result = bulk_delete_transactions_impl(db, ids.clone()).await;
@@ -728,41 +542,17 @@ async fn test_bulk_delete_transactions_success() {
 
 #[tokio::test]
 async fn test_bulk_delete_transactions_reports_failed_ids() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Bulk Delete Failed Test").await;
 
-    let account = NewAccount {
-        name: super::unique_name("Bulk Delete Failed Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
-    let csv_content = "Date,Amount,Description\n2025-01-01,-50.00,Test Transaction";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
-
-    let transactions = list_transactions_impl(db, Some(TransactionFilter {
-        account_id: Some(account_id),
-        category_id: None,
-        search: None,
-        start_date: None,
-        end_date: None,
-        limit: Some(1),
-        offset: Some(0),
-    }))
-    .await
-    .expect("Failed to list transactions");
-
-    let valid_id = transactions[0].id;
+    // Create one transaction
+    let valid_id = super::fixtures::insert_single_transaction(
+        db,
+        account_id,
+        "2025-01-01",
+        -50.00,
+        "Test Transaction"
+    ).await;
     let invalid_id = 999999i64;
 
     // Try to delete both valid and invalid IDs
@@ -807,17 +597,10 @@ async fn test_bulk_delete_transactions_validates_max_1000() {
 
 #[tokio::test]
 async fn test_bulk_update_category_success() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Bulk Update Test").await;
 
-    // Create test account and category
-    let account = NewAccount {
-        name: super::unique_name("Bulk Update Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
+    // Create test category
     let category = NewCategory {
         name: super::unique_name("Bulk Test Category"),
         icon: None,
@@ -826,37 +609,13 @@ async fn test_bulk_update_category_success() {
         .await
         .expect("Failed to create category");
 
-    // Import transactions
-    let csv_content = "Date,Amount,Description\n\
-                       2025-01-01,-50.00,Transaction 1\n\
-                       2025-01-02,-75.00,Transaction 2\n\
-                       2025-01-03,-100.00,Transaction 3";
-
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
-
-    // Get transaction IDs
-    let transactions = list_transactions_impl(db, Some(TransactionFilter {
-        account_id: Some(account_id),
-        category_id: None,
-        search: None,
-        start_date: None,
-        end_date: None,
-        limit: Some(3),
-        offset: Some(0),
-    }))
-    .await
-    .expect("Failed to list transactions");
-
-    let ids: Vec<i64> = transactions.iter().map(|t| t.id).collect();
+    // Create 3 transactions directly
+    let transactions = vec![
+        super::fixtures::TestTransaction::new("2025-01-01", -50.00, "Transaction 1"),
+        super::fixtures::TestTransaction::new("2025-01-02", -75.00, "Transaction 2"),
+        super::fixtures::TestTransaction::new("2025-01-03", -100.00, "Transaction 3"),
+    ];
+    let ids = super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
     // Bulk update category
     let result = bulk_update_category_impl(db, ids.clone(), new_category_id).await;
@@ -893,65 +652,37 @@ async fn test_bulk_update_category_success() {
 
 #[tokio::test]
 async fn test_bulk_update_category_validates_category_exists() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Category Validation Test").await;
 
-    let account = NewAccount {
-        name: super::unique_name("Category Validation Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
+    // Create one transaction
+    let transaction_id = super::fixtures::insert_single_transaction(
+        db,
+        account_id,
+        "2025-01-01",
+        -50.00,
+        "Test Transaction"
+    ).await;
 
-    let csv_content = "Date,Amount,Description\n2025-01-01,-50.00,Test Transaction";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
+    // Try to update to non-existent category
+    let invalid_category_id = 999999i64;
+    let result = bulk_update_category_impl(db, vec![transaction_id], invalid_category_id).await;
 
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
-
-    let transactions = list_transactions_impl(db, Some(TransactionFilter {
-        account_id: Some(account_id),
-        category_id: None,
-        search: None,
-        start_date: None,
-        end_date: None,
-        limit: Some(1),
-        offset: Some(0),
-    }))
-    .await
-    .expect("Failed to list transactions");
-
-    let ids: Vec<i64> = transactions.iter().map(|t| t.id).collect();
-
-    // Try to update with non-existent category
-    let result = bulk_update_category_impl(db, ids, 999999).await;
-    assert!(result.is_err(), "Should reject invalid category");
-
+    assert!(result.is_err(), "Should reject non-existent category");
     let error = result.unwrap_err();
     assert!(
-        error.to_string().contains("not found") || error.to_string().contains("Category"),
+        error.to_string().to_lowercase().contains("category") ||
+        error.to_string().to_lowercase().contains("not found"),
         "Error should mention category not found"
     );
 }
 
 #[tokio::test]
 async fn test_bulk_update_category_reports_failed_ids() {
-    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
+    let account_id = super::fixtures::create_test_account(db, "Bulk Update Failed Test").await;
 
-    let account = NewAccount {
-        name: super::unique_name("Bulk Update Failed Test"),
-        account_type: budget_balancer_lib::models::account::AccountType::Checking,
-        initial_balance: 0.0,
-    };
-    let account_id = create_account_impl(db, account).await.expect("Failed to create account");
-
+    // Create test category
     let category = NewCategory {
         name: super::unique_name("Update Failed Category"),
         icon: None,
@@ -960,31 +691,14 @@ async fn test_bulk_update_category_reports_failed_ids() {
         .await
         .expect("Failed to create category");
 
-    let csv_content = "Date,Amount,Description\n2025-01-01,-50.00,Test Transaction";
-    let mapping = ColumnMapping {
-        date: "Date".to_string(),
-        amount: "Amount".to_string(),
-        description: "Description".to_string(),
-        merchant: None,
-    };
-
-    import_csv_impl(db, account_id, csv_content.to_string(), mapping)
-        .await
-        .expect("Failed to import CSV");
-
-    let transactions = list_transactions_impl(db, Some(TransactionFilter {
-        account_id: Some(account_id),
-        category_id: None,
-        search: None,
-        start_date: None,
-        end_date: None,
-        limit: Some(1),
-        offset: Some(0),
-    }))
-    .await
-    .expect("Failed to list transactions");
-
-    let valid_id = transactions[0].id;
+    // Create one transaction
+    let valid_id = super::fixtures::insert_single_transaction(
+        db,
+        account_id,
+        "2025-01-01",
+        -50.00,
+        "Test Transaction"
+    ).await;
     let invalid_id = 999999i64;
 
     // Try to update both valid and invalid IDs

@@ -1,7 +1,8 @@
 use budget_balancer_lib::commands::account_commands::create_account_impl;
-use budget_balancer_lib::commands::csv_commands::{get_csv_headers, import_csv_impl};
+use budget_balancer_lib::commands::csv_commands::{get_csv_headers, import_csv_impl, reset_rate_limiter};
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
+use serial_test::serial;
 
 #[tokio::test]
 async fn test_get_csv_headers() {
@@ -39,7 +40,9 @@ async fn test_get_csv_headers_empty_file() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_import_csv_basic() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     // Create a test account
     let account = NewAccount {
@@ -68,7 +71,9 @@ async fn test_import_csv_basic() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_import_csv_duplicate_detection() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     // Create a test account
     let account = NewAccount {
@@ -90,6 +95,10 @@ async fn test_import_csv_duplicate_detection() {
     // Import first time
     let result1 = import_csv_impl(db, account_id, csv_content.to_string(), mapping.clone()).await;
     assert!(result1.is_ok(), "First import should succeed");
+
+    // Reset rate limiter before second import
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // Import same data again
     let result2 = import_csv_impl(db, account_id, csv_content.to_string(), mapping).await;
@@ -150,7 +159,9 @@ async fn test_import_csv_missing_required_column() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_import_csv_with_categorization() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     let account = NewAccount {
         name: super::unique_name("Categorization Test"),
@@ -183,7 +194,9 @@ async fn test_import_csv_with_categorization() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_import_csv_transaction_amount_exceeds_max() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     let account = NewAccount {
         name: super::unique_name("Max Amount Test"),

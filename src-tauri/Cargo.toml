@@ -32,3 +32,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+serial_test = "3.2"
+rstest = "0.23"
+fake = { version = "2.9", features = ["derive"] }
+rand = "0.8"

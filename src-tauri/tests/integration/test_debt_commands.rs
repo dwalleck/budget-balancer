@@ -3,6 +3,7 @@ use budget_balancer_lib::commands::debt_commands::{
     calculate_payoff_plan_impl, compare_strategies_impl, create_debt_impl, get_debt_progress_impl, get_payoff_plan_impl,
     list_debts_impl, record_debt_payment_impl, update_debt_impl,
 };
+use serial_test::serial;
 use sqlx::SqlitePool;
 
 // Helper function for unique names
@@ -175,6 +176,7 @@ async fn test_update_debt_not_found() {
 
 // T033: Contract test for calculate_payoff_plan command (avalanche)
 #[tokio::test]
+#[serial]
 async fn test_calculate_avalanche_payoff_plan() {
     let db = super::get_test_db_pool().await;
     // Clean slate for this test
@@ -215,6 +217,7 @@ async fn test_calculate_avalanche_payoff_plan() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_calculate_snowball_payoff_plan() {
     let db = super::get_test_db_pool().await;
     // Clean slate for this test
@@ -249,6 +252,7 @@ async fn test_calculate_snowball_payoff_plan() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_calculate_payoff_plan_insufficient_funds() {
     let db = super::get_test_db_pool().await;
     let debt = NewDebt {
@@ -303,6 +307,7 @@ async fn test_calculate_payoff_plan_invalid_strategy() {
 
 // T034: Contract test for get_payoff_plan command
 #[tokio::test]
+#[serial]
 async fn test_get_payoff_plan() {
     let db = super::get_test_db_pool().await;
     // Clean slate for this test
@@ -350,6 +355,7 @@ async fn test_get_payoff_plan_not_found() {
 
 // T035: Contract test for record_debt_payment command
 #[tokio::test]
+#[serial]
 async fn test_record_debt_payment() {
     let db = super::get_test_db_pool().await;
     let debt = NewDebt {
@@ -439,6 +445,7 @@ async fn test_record_debt_payment_invalid_amount() {
 
 // T036: Contract test for get_debt_progress command
 #[tokio::test]
+#[serial]
 async fn test_get_debt_progress() {
     let db = super::get_test_db_pool().await;
     let debt = NewDebt {
@@ -470,6 +477,7 @@ async fn test_get_debt_progress() {
 
 // T037: Contract test for compare_strategies command
 #[tokio::test]
+#[serial]
 async fn test_compare_strategies() {
     let db = super::get_test_db_pool().await;
     // Clean slate for this test

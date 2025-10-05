@@ -1,13 +1,15 @@
 use budget_balancer_lib::commands::account_commands::create_account_impl;
 use budget_balancer_lib::commands::category_commands::create_category_impl;
-use budget_balancer_lib::commands::csv_commands::import_csv_impl;
-use budget_balancer_lib::commands::transaction_commands::categorize_transaction_impl;
+use budget_balancer_lib::commands::csv_commands::{import_csv_impl, reset_rate_limiter};
 use budget_balancer_lib::models::account::NewAccount;
 use budget_balancer_lib::models::category::NewCategory;
 use budget_balancer_lib::services::csv_parser::ColumnMapping;
+use serial_test::serial;
 
 #[tokio::test]
+#[serial]
 async fn test_categorize_transaction_with_matching_rule() {
+    reset_rate_limiter();
     let db = super::get_test_db_pool().await;
     // Create test account
     let account = NewAccount {
@@ -30,6 +32,9 @@ async fn test_categorize_transaction_with_matching_rule() {
         .await
         .expect("Failed to import CSV");
 
+    // Sleep to ensure rate limiter window passes before next test
+    tokio::time::sleep(tokio::time::Duration::from_millis(super::RATE_LIMITER_DELAY_MS)).await;
+
     // Get the transaction ID (should be the first one for this account)
     // Note: We need a way to get transactions - this assumes list_transactions exists
     // For now, we'll assume transaction_id = 1 for the test
@@ -40,7 +45,10 @@ async fn test_categorize_transaction_with_matching_rule() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_categorize_transaction_no_rule_match() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(super::RATE_LIMITER_DELAY_MS)).await;
     let db = super::get_test_db_pool().await;
     // Create test account
     let account = NewAccount {
@@ -63,12 +71,18 @@ async fn test_categorize_transaction_no_rule_match() {
         .await
         .expect("Failed to import CSV");
 
+    // Sleep to ensure rate limiter window passes before next test
+    tokio::time::sleep(tokio::time::Duration::from_millis(super::RATE_LIMITER_DELAY_MS)).await;
+
     // Test categorization - should assign to "Uncategorized"
     // TODO: Similar to above, needs transaction ID from list_transactions
 }
 
 #[tokio::test]
+#[serial]
 async fn test_categorize_transaction_custom_category() {
+    reset_rate_limiter();
+    tokio::time::sleep(tokio::time::Duration::from_millis(super::RATE_LIMITER_DELAY_MS)).await;
     let db = super::get_test_db_pool().await;
     // Create test account
     let account = NewAccount {
