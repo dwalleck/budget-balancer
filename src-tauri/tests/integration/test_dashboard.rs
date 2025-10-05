@@ -43,10 +43,11 @@ async fn test_dashboard_with_data() {
     let db = super::get_test_db_pool().await;
     let account_id = super::fixtures::create_test_account(db, "Dashboard Test").await;
 
-    // Create test transactions directly with current month dates (before current date 2025-10-05)
+    // Create test transactions with relative dates (2 and 4 days ago)
+    // This ensures tests work regardless of current date or month
     let transactions = vec![
-        super::fixtures::TestTransaction::new("2025-10-01", -100.00, "Groceries").with_merchant("Whole Foods"),
-        super::fixtures::TestTransaction::new("2025-10-03", 500.00, "Paycheck").with_merchant("Employer"),
+        super::fixtures::TestTransaction::new(&super::days_ago(4), -100.00, "Groceries").with_merchant("Whole Foods"),
+        super::fixtures::TestTransaction::new(&super::days_ago(2), 500.00, "Paycheck").with_merchant("Employer"),
     ];
     super::fixtures::insert_test_transactions(db, account_id, transactions).await;
 
