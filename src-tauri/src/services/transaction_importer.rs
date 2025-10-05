@@ -1,7 +1,7 @@
 use super::csv_parser::{CsvParser, ColumnMapping};
 use super::duplicate_detector::DuplicateDetector;
 use super::categorizer::Categorizer;
-use crate::constants::DEFAULT_CATEGORY_ID;
+use crate::constants::{DEFAULT_CATEGORY_ID, MAX_TRANSACTION_AMOUNT};
 use crate::models::transaction::NewTransaction;
 
 #[derive(Debug)]
@@ -9,6 +9,7 @@ pub enum ImportError {
     CsvError(String),
     DuplicateError(String),
     CategorizerError(String),
+    ValidationError(String),
     DatabaseError(String),
 }
 
@@ -18,6 +19,7 @@ impl std::fmt::Display for ImportError {
             ImportError::CsvError(e) => write!(f, "CSV Error: {}", e),
             ImportError::DuplicateError(e) => write!(f, "Duplicate Detection Error: {}", e),
             ImportError::CategorizerError(e) => write!(f, "Categorization Error: {}", e),
+            ImportError::ValidationError(e) => write!(f, "Validation Error: {}", e),
             ImportError::DatabaseError(e) => write!(f, "Database Error: {}", e),
         }
     }
@@ -51,6 +53,14 @@ impl TransactionImporter {
         let mut errors = 0;
 
         for transaction in transactions {
+            // Validate transaction amount
+            if transaction.amount.abs() > MAX_TRANSACTION_AMOUNT {
+                return Err(ImportError::ValidationError(
+                    format!("Transaction amount ${:.2} exceeds maximum allowed amount of ${:.2}",
+                        transaction.amount.abs(), MAX_TRANSACTION_AMOUNT)
+                ));
+            }
+
             // Check for duplicates
             let is_duplicate = DuplicateDetector::is_duplicate(
                 db,
