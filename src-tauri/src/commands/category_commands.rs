@@ -70,37 +70,41 @@ pub async fn update_category_impl(
         return Err("Cannot modify predefined categories".to_string());
     }
 
-    // Use match to handle different update combinations with static SQL
-    match (&update.name, &update.icon) {
-        (Some(name), Some(icon)) => {
-            sqlx::query("UPDATE categories SET name = ?, icon = ? WHERE id = ?")
-                .bind(name)
-                .bind(icon)
-                .bind(update.id)
-                .execute(db)
-                .await
-                .map_err(|e| sanitize_db_error(e, "update category"))?;
-        }
-        (Some(name), None) => {
-            sqlx::query("UPDATE categories SET name = ? WHERE id = ?")
-                .bind(name)
-                .bind(update.id)
-                .execute(db)
-                .await
-                .map_err(|e| sanitize_db_error(e, "update category"))?;
-        }
-        (None, Some(icon)) => {
-            sqlx::query("UPDATE categories SET icon = ? WHERE id = ?")
-                .bind(icon)
-                .bind(update.id)
-                .execute(db)
-                .await
-                .map_err(|e| sanitize_db_error(e, "update category"))?;
-        }
-        (None, None) => {
-            return Err("At least one field (name or icon) must be provided for update".to_string());
-        }
+    // Build UPDATE query dynamically (still SQL-injection safe via parameterized queries)
+    let mut set_clauses = Vec::new();
+    let mut has_updates = false;
+
+    if update.name.is_some() {
+        set_clauses.push("name = ?");
+        has_updates = true;
     }
+    if update.icon.is_some() {
+        set_clauses.push("icon = ?");
+        has_updates = true;
+    }
+
+    if !has_updates {
+        return Err("At least one field (name or icon) must be provided for update".to_string());
+    }
+
+    // Build the SQL query string
+    let sql = format!("UPDATE categories SET {} WHERE id = ?", set_clauses.join(", "));
+
+    // Bind parameters in the same order as set_clauses
+    let mut query = sqlx::query(&sql);
+    if let Some(ref name) = update.name {
+        query = query.bind(name);
+    }
+    if let Some(ref icon) = update.icon {
+        query = query.bind(icon);
+    }
+    query = query.bind(update.id);
+
+    // Execute the update
+    query
+        .execute(db)
+        .await
+        .map_err(|e| sanitize_db_error(e, "update category"))?;
 
     // Fetch and return updated category
     sqlx::query_as::<_, Category>(
