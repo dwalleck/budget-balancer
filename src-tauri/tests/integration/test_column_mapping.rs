@@ -15,14 +15,14 @@ async fn test_save_column_mapping() {
     let result = save_column_mapping_impl(db, mapping).await;
     assert!(result.is_ok(), "Failed to save column mapping: {:?}", result);
 
-    let mapping_id = result.unwrap();
-    assert!(mapping_id > 0, "Mapping ID should be greater than 0");
+    let saved_mapping = result.unwrap();
+    assert!(saved_mapping.id > 0, "Mapping ID should be greater than 0");
 }
 
 #[tokio::test]
-async fn test_save_column_mapping_duplicate_name() {
+async fn test_save_column_mapping_upsert() {
     let db = super::get_test_db_pool().await;
-    let mapping_name = super::unique_name("Duplicate Test Bank");
+    let mapping_name = super::unique_name("Upsert Test Bank");
 
     let mapping1 = NewColumnMapping {
         source_name: mapping_name.clone(),
@@ -35,8 +35,9 @@ async fn test_save_column_mapping_duplicate_name() {
     // First save should succeed
     let result1 = save_column_mapping_impl(db, mapping1).await;
     assert!(result1.is_ok(), "First save should succeed");
+    let first_id = result1.unwrap().id;
 
-    // Second save with same name should fail
+    // Second save with same name should UPDATE (upsert behavior)
     let mapping2 = NewColumnMapping {
         source_name: mapping_name.clone(),
         date_col: "Date2".to_string(),
@@ -46,7 +47,10 @@ async fn test_save_column_mapping_duplicate_name() {
     };
 
     let result2 = save_column_mapping_impl(db, mapping2).await;
-    assert!(result2.is_err(), "Duplicate source_name should fail");
+    assert!(result2.is_ok(), "Second save should succeed (upsert)");
+    let updated = result2.unwrap();
+    assert_eq!(updated.id, first_id, "Should have same ID (updated, not created)");
+    assert_eq!(updated.date_col, "Date2", "Date column should be updated");
 }
 
 #[tokio::test]

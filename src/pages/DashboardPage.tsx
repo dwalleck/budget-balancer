@@ -45,11 +45,12 @@ export function DashboardPage() {
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Total Spending
               </p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                <span aria-label="Expense">↓</span>
                 ${dashboard.total_spending.toFixed(2)}
               </p>
             </div>
-            <div className="text-3xl">📉</div>
+            <div className="text-3xl" aria-hidden="true">📉</div>
           </div>
         </div>
 
@@ -60,11 +61,12 @@ export function DashboardPage() {
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Total Income
               </p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400 flex items-center gap-2">
+                <span aria-label="Income">↑</span>
                 ${dashboard.total_income.toFixed(2)}
               </p>
             </div>
-            <div className="text-3xl">📈</div>
+            <div className="text-3xl" aria-hidden="true">📈</div>
           </div>
         </div>
 
@@ -74,16 +76,19 @@ export function DashboardPage() {
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Net</p>
               <p
-                className={`text-2xl font-bold ${
+                className={`text-2xl font-bold flex items-center gap-2 ${
                   dashboard.net >= 0
                     ? "text-green-600 dark:text-green-400"
                     : "text-red-600 dark:text-red-400"
                 }`}
               >
+                <span aria-label={dashboard.net >= 0 ? "Positive" : "Negative"}>
+                  {dashboard.net >= 0 ? "↑" : "↓"}
+                </span>
                 ${dashboard.net.toFixed(2)}
               </p>
             </div>
-            <div className="text-3xl">
+            <div className="text-3xl" aria-hidden="true">
               {dashboard.net >= 0 ? "✅" : "⚠️"}
             </div>
           </div>
@@ -161,7 +166,8 @@ export function DashboardPage() {
               <span className="text-gray-600 dark:text-gray-400">
                 On Track
               </span>
-              <span className="font-semibold text-green-600 dark:text-green-400">
+              <span className="font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
+                <span aria-label="On track">✓</span>
                 {dashboard.target_summary.on_track_count}
               </span>
             </div>
@@ -169,7 +175,8 @@ export function DashboardPage() {
               <span className="text-gray-600 dark:text-gray-400">
                 Over Budget
               </span>
-              <span className="font-semibold text-red-600 dark:text-red-400">
+              <span className="font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
+                <span aria-label="Over budget">!</span>
                 {dashboard.target_summary.over_count}
               </span>
             </div>

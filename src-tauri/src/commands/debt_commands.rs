@@ -82,6 +82,13 @@ pub struct CompareStrategiesResponse {
     pub savings: ComparisonSavings,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteDebtResponse {
+    pub success: bool,
+    pub deleted_debt_id: i64,
+    pub deleted_payments_count: i64,
+}
+
 // Business logic functions (used by both commands and tests)
 
 pub async fn create_debt_impl(db: &SqlitePool, debt: NewDebt) -> Result<i64, DebtError> {
@@ -563,6 +570,49 @@ pub async fn compare_strategies_impl(db: &SqlitePool, monthly_amount: f64) -> Re
 #[tauri::command]
 pub async fn compare_strategies(db_pool: tauri::State<'_, DbPool>, monthly_amount: f64) -> Result<CompareStrategiesResponse, String> {
     compare_strategies_impl(&db_pool.0, monthly_amount)
+        .await
+        .map_err(|e| e.to_user_message())
+}
+
+pub async fn delete_debt_impl(db: &SqlitePool, debt_id: i64) -> Result<DeleteDebtResponse, DebtError> {
+    // Check if debt exists
+    let exists: Option<(i64,)> = sqlx::query_as("SELECT id FROM debts WHERE id = ?")
+        .bind(debt_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| DebtError::Database(e.to_string()))?;
+
+    if exists.is_none() {
+        return Err(DebtError::NotFound(debt_id));
+    }
+
+    // Count associated payments before deletion
+    let payment_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM debt_payments WHERE debt_id = ?")
+        .bind(debt_id)
+        .fetch_one(db)
+        .await
+        .map_err(|e| DebtError::Database(e.to_string()))?;
+
+    let deleted_payments_count = payment_count.0;
+
+    // Delete the debt (CASCADE will delete associated debt_payments)
+    sqlx::query("DELETE FROM debts WHERE id = ?")
+        .bind(debt_id)
+        .execute(db)
+        .await
+        .map_err(|e| DebtError::Database(e.to_string()))?;
+
+    Ok(DeleteDebtResponse {
+        success: true,
+        deleted_debt_id: debt_id,
+        deleted_payments_count,
+    })
+}
+
+// T081: Delete debt command
+#[tauri::command]
+pub async fn delete_debt(db_pool: tauri::State<'_, DbPool>, debt_id: i64) -> Result<DeleteDebtResponse, String> {
+    delete_debt_impl(&db_pool.0, debt_id)
         .await
         .map_err(|e| e.to_user_message())
 }

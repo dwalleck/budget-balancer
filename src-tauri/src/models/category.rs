@@ -16,13 +16,19 @@ impl std::fmt::Display for CategoryType {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CategoryFilter {
+    Predefined,
+    Custom,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Category {
     pub id: i64,
     pub name: String,
     #[serde(rename = "type")]
     #[sqlx(rename = "type")]
-    pub category_type: String,
+    pub r#type: String,  // Use r#type to match SQL 'type' keyword
     pub parent_id: Option<i64>,
     pub icon: Option<String>,
     pub created_at: String,
@@ -32,4 +38,18 @@ pub struct Category {
 pub struct NewCategory {
     pub name: String,
     pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCategory {
+    pub id: i64,
+    pub name: Option<String>,
+    pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteCategoryResponse {
+    pub success: bool,
+    pub deleted_category_id: i64,
+    pub reassigned_transactions_count: i64,
 }

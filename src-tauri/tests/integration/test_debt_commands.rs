@@ -1,7 +1,8 @@
 use budget_balancer_lib::models::debt::NewDebt;
 use budget_balancer_lib::commands::debt_commands::{
-    calculate_payoff_plan_impl, compare_strategies_impl, create_debt_impl, get_debt_progress_impl, get_payoff_plan_impl,
-    list_debts_impl, record_debt_payment_impl, update_debt_impl,
+    calculate_payoff_plan_impl, compare_strategies_impl, create_debt_impl, delete_debt_impl,
+    get_debt_progress_impl, get_payoff_plan_impl, list_debts_impl, record_debt_payment_impl,
+    update_debt_impl,
 };
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -517,5 +518,93 @@ async fn test_compare_strategies() {
     assert!(
         comparison.avalanche.total_interest <= comparison.snowball.total_interest,
         "Avalanche should save interest compared to snowball"
+    );
+}
+
+// T051: Contract test for delete_debt command with cascade
+#[tokio::test]
+#[serial]
+async fn test_delete_debt_with_cascade() {
+    let db = super::get_test_db_pool().await;
+
+    // Create a debt
+    let debt = NewDebt {
+        name: unique_name("Delete Test Debt"),
+        balance: 1000.0,
+        interest_rate: 15.0,
+        min_payment: 50.0,
+    };
+    let debt_id = create_debt_impl(db, debt).await.unwrap();
+
+    // Record some payments
+    record_debt_payment_impl(db, debt_id, 100.0, "2025-01-01".to_string(), None)
+        .await
+        .unwrap();
+    record_debt_payment_impl(db, debt_id, 150.0, "2025-02-01".to_string(), None)
+        .await
+        .unwrap();
+
+    // Delete the debt
+    let result = delete_debt_impl(db, debt_id).await;
+    assert!(
+        result.is_ok(),
+        "Failed to delete debt: {:?}",
+        result.err()
+    );
+
+    let response = result.unwrap();
+    assert!(response.success);
+    assert_eq!(response.deleted_debt_id, debt_id);
+    assert_eq!(response.deleted_payments_count, 2, "Should have deleted 2 payments");
+
+    // Verify debt no longer exists
+    let debts = list_debts_impl(db).await.unwrap();
+    assert!(
+        !debts.iter().any(|d| d.id == debt_id),
+        "Debt should be deleted"
+    );
+
+    // Verify payments were cascaded deleted
+    let payments = get_debt_progress_impl(db, debt_id, None, None).await;
+    assert!(payments.is_err(), "Payments should be deleted via cascade");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_delete_debt_no_payments() {
+    let db = super::get_test_db_pool().await;
+
+    // Create a debt with no payments
+    let debt = NewDebt {
+        name: unique_name("Simple Delete Test"),
+        balance: 500.0,
+        interest_rate: 10.0,
+        min_payment: 25.0,
+    };
+    let debt_id = create_debt_impl(db, debt).await.unwrap();
+
+    // Delete the debt
+    let result = delete_debt_impl(db, debt_id).await;
+    assert!(result.is_ok(), "Failed to delete debt: {:?}", result.err());
+
+    let response = result.unwrap();
+    assert!(response.success);
+    assert_eq!(response.deleted_debt_id, debt_id);
+    assert_eq!(response.deleted_payments_count, 0, "Should have no payments to delete");
+}
+
+#[tokio::test]
+async fn test_delete_debt_not_found() {
+    let db = super::get_test_db_pool().await;
+
+    let result = delete_debt_impl(db, 99999).await;
+    assert!(result.is_err(), "Should fail for non-existent debt");
+
+    let error = result.unwrap_err();
+    let error_msg = error.to_string();
+    assert!(
+        error_msg.contains("not found") || error_msg.contains("NotFound"),
+        "Error should indicate debt not found: {}",
+        error_msg
     );
 }

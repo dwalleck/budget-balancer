@@ -58,23 +58,29 @@ export const AccountCreationDialog: React.FC<AccountCreationDialogProps> = ({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Account Name</label>
+            <label htmlFor="account-name" className="block text-sm font-medium mb-1">
+              Account Name <span className="text-red-600">*</span>
+            </label>
             <input
+              id="account-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Chase Checking"
               className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              aria-required="true"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Account Type</label>
+            <label id="account-type-label" className="block text-sm font-medium mb-1">
+              Account Type <span className="text-red-600">*</span>
+            </label>
             <Select
               value={accountType}
               onValueChange={(value) => setAccountType(value as 'checking' | 'savings' | 'credit_card')}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-labelledby="account-type-label" aria-required="true">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -86,8 +92,11 @@ export const AccountCreationDialog: React.FC<AccountCreationDialogProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Initial Balance</label>
+            <label htmlFor="initial-balance" className="block text-sm font-medium mb-1">
+              Initial Balance
+            </label>
             <input
+              id="initial-balance"
               type="number"
               step="0.01"
               value={initialBalance}
@@ -97,8 +106,9 @@ export const AccountCreationDialog: React.FC<AccountCreationDialogProps> = ({
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200">
-              {error}
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200 flex items-start gap-2" role="alert">
+              <span aria-label="Error" className="text-base">✖</span>
+              <span>{error}</span>
             </div>
           )}
 
