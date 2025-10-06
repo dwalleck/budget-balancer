@@ -107,54 +107,62 @@ export function DebtPlannerPage() {
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Strategy
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="strategy"
-                  value="avalanche"
-                  checked={strategy === "avalanche"}
-                  onChange={(e) =>
-                    setStrategy(e.target.value as "avalanche" | "snowball")
-                  }
-                  className="mr-2"
-                />
-                <span className="text-gray-900 dark:text-white">
-                  Avalanche (Highest Interest First)
-                </span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="strategy"
-                  value="snowball"
-                  checked={strategy === "snowball"}
-                  onChange={(e) =>
-                    setStrategy(e.target.value as "avalanche" | "snowball")
-                  }
-                  className="mr-2"
-                />
-                <span className="text-gray-900 dark:text-white">
-                  Snowball (Smallest Balance First)
-                </span>
-              </label>
-            </div>
+            <fieldset>
+              <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Strategy <span className="text-red-600">*</span>
+              </legend>
+              <div className="flex gap-4">
+                <label htmlFor="strategy-avalanche" className="flex items-center">
+                  <input
+                    id="strategy-avalanche"
+                    type="radio"
+                    name="strategy"
+                    value="avalanche"
+                    checked={strategy === "avalanche"}
+                    onChange={(e) =>
+                      setStrategy(e.target.value as "avalanche" | "snowball")
+                    }
+                    className="mr-2"
+                    aria-required="true"
+                  />
+                  <span className="text-gray-900 dark:text-white">
+                    Avalanche (Highest Interest First)
+                  </span>
+                </label>
+                <label htmlFor="strategy-snowball" className="flex items-center">
+                  <input
+                    id="strategy-snowball"
+                    type="radio"
+                    name="strategy"
+                    value="snowball"
+                    checked={strategy === "snowball"}
+                    onChange={(e) =>
+                      setStrategy(e.target.value as "avalanche" | "snowball")
+                    }
+                    className="mr-2"
+                    aria-required="true"
+                  />
+                  <span className="text-gray-900 dark:text-white">
+                    Snowball (Smallest Balance First)
+                  </span>
+                </label>
+              </div>
+            </fieldset>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Monthly Payment Amount
+            <label htmlFor="monthly-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Monthly Payment Amount <span className="text-red-600">*</span>
             </label>
             <input
+              id="monthly-amount"
               type="number"
               value={monthlyAmount}
               onChange={(e) => setMonthlyAmount(e.target.value)}
               placeholder="Enter amount"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               min={totalMinPayment}
+              aria-required="true"
             />
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Minimum: ${totalMinPayment.toFixed(2)}

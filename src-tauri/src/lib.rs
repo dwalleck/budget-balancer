@@ -72,6 +72,7 @@ pub fn run() {
             commands::debt_commands::create_debt,
             commands::debt_commands::list_debts,
             commands::debt_commands::update_debt,
+            commands::debt_commands::delete_debt,
             commands::debt_commands::calculate_payoff_plan,
             commands::debt_commands::get_payoff_plan,
             commands::debt_commands::record_debt_payment,

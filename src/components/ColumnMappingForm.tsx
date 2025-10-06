@@ -51,12 +51,14 @@ export const ColumnMappingForm: React.FC<ColumnMappingFormProps> = ({
       </div>
       <div className="space-y-3">
         <div>
-          <label className="block text-sm font-medium mb-1">Date Column</label>
+          <label id="date-column-label" className="block text-sm font-medium mb-1">
+            Date Column <span className="text-red-600">*</span>
+          </label>
           <Select
             value={mapping.date}
             onValueChange={(value) => setMapping({ ...mapping, date: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="date-column-label" aria-required="true">
               <SelectValue placeholder="Select date column" />
             </SelectTrigger>
             <SelectContent>
@@ -70,12 +72,14 @@ export const ColumnMappingForm: React.FC<ColumnMappingFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Amount Column</label>
+          <label id="amount-column-label" className="block text-sm font-medium mb-1">
+            Amount Column <span className="text-red-600">*</span>
+          </label>
           <Select
             value={mapping.amount}
             onValueChange={(value) => setMapping({ ...mapping, amount: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="amount-column-label" aria-required="true">
               <SelectValue placeholder="Select amount column" />
             </SelectTrigger>
             <SelectContent>
@@ -89,12 +93,14 @@ export const ColumnMappingForm: React.FC<ColumnMappingFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Description Column</label>
+          <label id="description-column-label" className="block text-sm font-medium mb-1">
+            Description Column <span className="text-red-600">*</span>
+          </label>
           <Select
             value={mapping.description}
             onValueChange={(value) => setMapping({ ...mapping, description: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="description-column-label" aria-required="true">
               <SelectValue placeholder="Select description column" />
             </SelectTrigger>
             <SelectContent>
@@ -108,12 +114,14 @@ export const ColumnMappingForm: React.FC<ColumnMappingFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Merchant Column (Optional)</label>
+          <label id="merchant-column-label" className="block text-sm font-medium mb-1">
+            Merchant Column (Optional)
+          </label>
           <Select
             value={mapping.merchant || 'none'}
             onValueChange={(value) => setMapping({ ...mapping, merchant: value === 'none' ? undefined : value })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-labelledby="merchant-column-label">
               <SelectValue placeholder="Select merchant column (optional)" />
             </SelectTrigger>
             <SelectContent>
@@ -129,14 +137,16 @@ export const ColumnMappingForm: React.FC<ColumnMappingFormProps> = ({
       </div>
 
       {result && (
-        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-sm text-green-800 dark:text-green-200">
-          {result}
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-sm text-green-800 dark:text-green-200 flex items-start gap-2" role="status">
+          <span aria-label="Success" className="text-base">✓</span>
+          <span>{result}</span>
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200">
-          {error}
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200 flex items-start gap-2" role="alert">
+          <span aria-label="Error" className="text-base">✖</span>
+          <span>{error}</span>
         </div>
       )}
 

@@ -64,41 +64,65 @@ export function SpendingBarChart({ categories }: SpendingBarChartProps) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
-      <BarChart
-        data={data}
-        margin={{
-          top: 20,
-          right: 30,
-          left: 20,
-          bottom: 60,
-        }}
-      >
-        <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-        <XAxis
-          dataKey="name"
-          angle={-45}
-          textAnchor="end"
-          height={80}
-          className="text-xs text-gray-600 dark:text-gray-400"
-        />
-        <YAxis
-          className="text-xs text-gray-600 dark:text-gray-400"
-          tickFormatter={(value) => `$${value}`}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend
-          wrapperStyle={{
-            paddingTop: "20px",
-          }}
-          formatter={() => (
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              Spending Amount
-            </span>
-          )}
-        />
-        <Bar dataKey="amount" fill="#3B82F6" radius={[8, 8, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <>
+      <div role="img" aria-label="Bar chart showing spending amount by category">
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart
+            data={data}
+            margin={{
+              top: 20,
+              right: 30,
+              left: 20,
+              bottom: 60,
+            }}
+          >
+            <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+            <XAxis
+              dataKey="name"
+              angle={-45}
+              textAnchor="end"
+              height={80}
+              className="text-xs text-gray-600 dark:text-gray-400"
+            />
+            <YAxis
+              className="text-xs text-gray-600 dark:text-gray-400"
+              tickFormatter={(value) => `$${value}`}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              wrapperStyle={{
+                paddingTop: "20px",
+              }}
+              formatter={() => (
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Spending Amount
+                </span>
+              )}
+            />
+            <Bar dataKey="amount" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Screen reader accessible data table */}
+      <table className="sr-only">
+        <caption>Spending Amount by Category</caption>
+        <thead>
+          <tr>
+            <th scope="col">Category</th>
+            <th scope="col">Amount</th>
+            <th scope="col">Transactions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((item, index) => (
+            <tr key={index}>
+              <td>{item.name}</td>
+              <td>${item.amount.toFixed(2)}</td>
+              <td>{item.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

@@ -105,33 +105,57 @@ export function SpendingPieChart({ categories }: SpendingPieChartProps) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          labelLine={false}
-          label={renderCustomLabel}
-          outerRadius={120}
-          fill="#8884d8"
-          dataKey="value"
-        >
-          {data.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+    <>
+      <div role="img" aria-label="Pie chart showing spending by category">
+        <ResponsiveContainer width="100%" height={400}>
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={renderCustomLabel}
+              outerRadius={120}
+              fill="#8884d8"
+              dataKey="value"
+            >
+              {data.map((_entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              verticalAlign="bottom"
+              height={36}
+              formatter={(value) => (
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {value}
+                </span>
+              )}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Screen reader accessible data table */}
+      <table className="sr-only">
+        <caption>Spending by Category</caption>
+        <thead>
+          <tr>
+            <th scope="col">Category</th>
+            <th scope="col">Amount</th>
+            <th scope="col">Percentage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((item, index) => (
+            <tr key={index}>
+              <td>{item.name}</td>
+              <td>${item.value.toFixed(2)}</td>
+              <td>{item.percentage.toFixed(1)}%</td>
+            </tr>
           ))}
-        </Pie>
-        <Tooltip content={<CustomTooltip />} />
-        <Legend
-          verticalAlign="bottom"
-          height={36}
-          formatter={(value) => (
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              {value}
-            </span>
-          )}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+        </tbody>
+      </table>
+    </>
   );
 }

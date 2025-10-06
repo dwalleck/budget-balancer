@@ -23,7 +23,7 @@
 - [x] T009 Create constants module in src-tauri/src/constants.rs (DEFAULT_CATEGORY_ID, MAX_CSV_ROWS, etc.)
 - [x] T010 Set up Vitest configuration with Tauri mocks in vitest.config.ts
 - [x] T011 Configure cargo-llvm-cov for backend test coverage in src-tauri/Cargo.toml
-- [ ] T011a **[PRIORITY]** Set up GitHub Actions CI/CD workflow in .github/workflows/ci.yml
+- [x] T011a **[PRIORITY]** Set up GitHub Actions CI/CD workflow in .github/workflows/ci.yml
   - Build for all platforms (Windows, macOS, Linux)
   - Run linters (ESLint, Prettier, Clippy, rustfmt)
   - Execute backend tests (cargo test) - **continue on test failure**
@@ -99,32 +99,32 @@
 - [x] T031 [P] Contract test for categorize_transaction with rules in src-tauri/tests/integration/transactions_test.rs
 - [x] T032 [P] Contract test for export_transactions to CSV/JSON in src-tauri/tests/integration/transactions_test.rs
 - [ ] T033 [P] Contract test for save_column_mapping with upsert in src-tauri/tests/integration/column_mappings_test.rs
-- [ ] T034 [P] Contract test for create_category command in src-tauri/tests/integration/categories_test.rs
+- [x] T034 [P] Contract test for create_category command in src-tauri/tests/integration/categories_test.rs
 
 ### Category Management Tests (contracts/categories.md - 4 commands)
-- [ ] T035 [P] Contract test for create_category (custom) in src-tauri/tests/integration/categories_test.rs
-- [ ] T036 [P] Contract test for list_categories with type filter in src-tauri/tests/integration/categories_test.rs
-- [ ] T037 [P] Contract test for update_category (custom only) in src-tauri/tests/integration/categories_test.rs
-- [ ] T038 [P] Contract test for delete_category with reassignment to Uncategorized in src-tauri/tests/integration/categories_test.rs
+- [x] T035 [P] Contract test for create_category (custom) in src-tauri/tests/integration/categories_test.rs
+- [x] T036 [P] Contract test for list_categories with type filter in src-tauri/tests/integration/categories_test.rs
+- [x] T037 [P] Contract test for update_category (custom only) in src-tauri/tests/integration/categories_test.rs
+- [x] T038 [P] Contract test for delete_category with reassignment to Uncategorized in src-tauri/tests/integration/categories_test.rs
 
 ### Category Rules Tests (contracts/category_rules.md - 4 commands)
-- [ ] T039 [P] Contract test for create_category_rule with pattern normalization in src-tauri/tests/integration/category_rules_test.rs
-- [ ] T040 [P] Contract test for list_category_rules ordered by priority in src-tauri/tests/integration/category_rules_test.rs
-- [ ] T041 [P] Contract test for update_category_rule command in src-tauri/tests/integration/category_rules_test.rs
-- [ ] T042 [P] Contract test for delete_category_rule command in src-tauri/tests/integration/category_rules_test.rs
+- [x] T039 [P] Contract test for create_category_rule with pattern normalization in src-tauri/tests/integration/category_rules_test.rs
+- [x] T040 [P] Contract test for list_category_rules ordered by priority in src-tauri/tests/integration/category_rules_test.rs
+- [x] T041 [P] Contract test for update_category_rule command in src-tauri/tests/integration/category_rules_test.rs
+- [x] T042 [P] Contract test for delete_category_rule command in src-tauri/tests/integration/category_rules_test.rs
 
 ### Column Mapping Tests (contracts/column_mappings.md - 5 commands)
-- [ ] T043 [P] Contract test for save_column_mapping with upsert behavior in src-tauri/tests/integration/column_mappings_test.rs
-- [ ] T044 [P] Contract test for list_column_mappings sorted by name in src-tauri/tests/integration/column_mappings_test.rs
-- [ ] T045 [P] Contract test for get_column_mapping by ID or source_name in src-tauri/tests/integration/column_mappings_test.rs
-- [ ] T046 [P] Contract test for update_column_mapping command in src-tauri/tests/integration/column_mappings_test.rs
-- [ ] T047 [P] Contract test for delete_column_mapping command in src-tauri/tests/integration/column_mappings_test.rs
+- [x] T043 [P] Contract test for save_column_mapping with upsert behavior in src-tauri/tests/integration/column_mappings_test.rs
+- [x] T044 [P] Contract test for list_column_mappings sorted by name in src-tauri/tests/integration/column_mappings_test.rs
+- [x] T045 [P] Contract test for get_column_mapping by ID or source_name in src-tauri/tests/integration/column_mappings_test.rs
+- [x] T046 [P] Contract test for update_column_mapping partial updates in src-tauri/tests/integration/column_mappings_test.rs
+- [x] T047 [P] Contract test for delete_column_mapping (no cascade) in src-tauri/tests/integration/column_mappings_test.rs
 
 ### Debt Management Tests (contracts/debts.md - 9 commands)
 - [x] T048 [P] Contract test for create_debt command in src-tauri/tests/integration/debts_test.rs
 - [x] T049 [P] Contract test for list_debts command in src-tauri/tests/integration/debts_test.rs
 - [x] T050 [P] Contract test for update_debt command in src-tauri/tests/integration/debts_test.rs
-- [ ] T051 [P] Contract test for delete_debt with cascade in src-tauri/tests/integration/debts_test.rs
+- [x] T051 [P] Contract test for delete_debt with cascade in src-tauri/tests/integration/debts_test.rs
 - [x] T052 [P] Contract test for calculate_payoff_plan avalanche strategy in src-tauri/tests/integration/debts_test.rs
 - [x] T053 [P] Contract test for calculate_payoff_plan snowball strategy in src-tauri/tests/integration/debts_test.rs
 - [x] T054 [P] Contract test for get_payoff_plan command in src-tauri/tests/integration/debts_test.rs
@@ -150,16 +150,16 @@
 - [x] T066 Implement account commands (create, list, update, delete) in src-tauri/src/commands/accounts.rs
 
 ### Category Services & Commands
-- [ ] T067 Create CategoryService with predefined protection in src-tauri/src/services/category_service.rs
-- [ ] T068 Implement category commands (create, list, update, delete) in src-tauri/src/commands/categories.rs
+- [x] T067 Create CategoryService with predefined protection in src-tauri/src/services/category_service.rs
+- [x] T068 Implement category commands (create, list, update, delete) in src-tauri/src/commands/categories.rs
 
 ### Category Rule Services & Commands
-- [ ] T069 Create CategoryRuleService with pattern matching in src-tauri/src/services/category_rule_service.rs
-- [ ] T070 Implement category_rule commands (create, list, update, delete) in src-tauri/src/commands/category_rules.rs
+- [x] T069 Create CategoryRuleService with pattern matching in src-tauri/src/services/category_rule_service.rs
+- [x] T070 Implement category_rule commands (create, list, update, delete) in src-tauri/src/commands/category_rules.rs
 
 ### Column Mapping Services & Commands
-- [ ] T071 Create ColumnMappingService with upsert logic in src-tauri/src/services/column_mapping_service.rs
-- [ ] T072 Implement column_mapping commands (save, list, get, update, delete) in src-tauri/src/commands/column_mappings.rs
+- [x] T071 Create ColumnMappingService with upsert logic in src-tauri/src/services/column_mapping_service.rs
+- [x] T072 Implement column_mapping commands (save, list, get, update, delete) in src-tauri/src/commands/column_mappings.rs
 
 ### Transaction Services & Commands (Enhanced)
 - [x] T073 Create TransactionService with duplicate detection in src-tauri/src/services/transaction_service.rs
@@ -172,7 +172,7 @@
 ### Debt Services & Commands (Enhanced)
 - [x] T079 Create DebtService with CRUD operations in src-tauri/src/services/debt_service.rs
 - [x] T080 Create DebtCalculationService for avalanche/snowball algorithms in src-tauri/src/services/debt_calculation_service.rs
-- [ ] T081 Implement delete_debt command with cascade in src-tauri/src/commands/debts.rs
+- [x] T081 Implement delete_debt command with cascade in src-tauri/src/commands/debts.rs
 
 ### Analytics Services & Commands
 - [x] T082 Create AnalyticsService for spending calculations in src-tauri/src/services/analytics_service.rs
@@ -329,23 +329,23 @@
 **See ACCESSIBILITY_AUDIT.md for detailed findings (Score: 5.5/10)**
 
 #### Priority 1 (Blocking - Must Fix for WCAG AA)
-- [ ] T182 **[CRITICAL]** Add htmlFor and id to ALL form inputs
+- [x] T182 **[CRITICAL]** Add htmlFor and id to ALL form inputs
   - AccountCreationDialog.tsx (3 inputs)
   - ColumnMappingForm.tsx (4 inputs)
   - DebtPlannerPage.tsx (all debt form inputs)
   - Add aria-required="true" to required fields
-- [ ] T183 **[CRITICAL]** Add text/icon indicators for color-coded information (per FR-044)
+- [x] T183 **[CRITICAL]** Add text/icon indicators for color-coded information (per FR-044)
   - DashboardPage.tsx: Add ↑/↓ icons for income/expense
   - Error/success messages: Add icons, not just red/green backgrounds
-- [ ] T184 **[CRITICAL]** Add alternative text/data tables for all charts
+- [x] T184 **[CRITICAL]** Add alternative text/data tables for all charts
   - SpendingPieChart.tsx: Add sr-only data table
   - SpendingBarChart.tsx: Add sr-only data table
   - TrendsLineChart.tsx: Add sr-only data table
   - Add role="img" and aria-label to chart containers
-- [ ] T185 **[CRITICAL]** Add required field indicators with asterisk and aria-required
+- [x] T185 **[CRITICAL]** Add required field indicators with asterisk and aria-required
   - Visual indicator: <span className="text-red-600">*</span>
   - Programmatic: aria-required="true"
-- [ ] T186 **[CRITICAL]** Add skip to main content link in AppLayout.tsx
+- [x] T186 **[CRITICAL]** Add skip to main content link in AppLayout.tsx
 
 #### Priority 2 (High - Should Fix)
 - [ ] T187 Add aria-label to all icon-only buttons
